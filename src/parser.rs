@@ -1,10 +1,33 @@
 use crate::stream::Stream;
 use crate::util;
-use core::{fmt, fmt::{Debug}};
+use core::{fmt, fmt::Debug};
 use std::{collections::HashMap, fmt::Formatter};
+
+macro_rules! str_to_u8_arr {
+    ($($st:expr),*) => {
+        &[$($st.as_bytes()),*]
+    }
+}
 
 const END_OF_TAG: &[u8] = &[b'<', b'/'];
 const SELF_CLOSING: &[u8] = &[b'/', b'>'];
+const VOID_TAGS: &[&[u8]] = str_to_u8_arr! [
+    "area",
+    "base", 
+    "br", 
+    "col", 
+    "embed", 
+    "hr", 
+    "img", 
+    "input", 
+    "keygen", 
+    "link", 
+    "meta", 
+    "param", 
+    "source", 
+    "track", 
+    "wbr"
+];
 
 pub struct HTMLTag<'a> {
     _name: &'a [u8],
@@ -172,6 +195,13 @@ impl<'a> Parser<'a> {
 
         self.stream.expect_and_skip(b'>')?;
 
+        if VOID_TAGS.contains(&name) {
+            // Some HTML tags don't have contents (e.g. <br>),
+            // so we need to return early
+            // Without it, any following tags would be sub-nodes 
+            return Some(HTMLTag::new(name, attr, children));
+        }
+
         while !self.stream.is_eof() {
             self.skip_whitespaces();
 
@@ -216,7 +246,6 @@ impl<'a> Parser<'a> {
 
     pub fn parse(&mut self) -> Tree<'a> {
         let mut tree = Vec::new();
-
 
         while let Some(node) = self.parse_single() {
             tree.push(node);
