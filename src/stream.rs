@@ -1,9 +1,9 @@
-use std::cmp::{min, max};
+use std::cmp::{min};
 
 #[derive(Debug)]
 pub struct Stream<'a, T> {
     pub idx: usize,
-    data: &'a [T]
+    data: &'a [T],
 }
 
 impl<'a, T: Copy> Stream<'a, T> {
