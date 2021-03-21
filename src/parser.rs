@@ -230,9 +230,7 @@ impl<'a> Parser<'a> {
             
             if is_comment {
                 self.stream.idx += COMMENT.len();
-                println!("skipping");
                 self.skip_comment();
-                println!("skipped, returning none");
 
                 // Comments are ignored, so we return no element
                 // TODO: We need to notify the caller that we actually parsed this element
