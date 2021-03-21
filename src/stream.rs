@@ -39,6 +39,13 @@ impl<'a, T: Eq + Copy> Stream<'a, T> {
 
         None
     }
+
+    /// Same as expect_and_skip, but returns a bool
+    pub fn expect_and_skip_cond(&mut self, expect: T) -> bool {
+        self.expect_and_skip(expect)
+            .map(|c| c == expect)
+            .unwrap_or(false)
+    }
 }
 
 impl<'a, T> Stream<'a, T> {
