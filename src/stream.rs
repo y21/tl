@@ -1,4 +1,4 @@
-use std::cmp::{min};
+use std::cmp::min;
 
 #[derive(Debug)]
 pub struct Stream<'a, T> {

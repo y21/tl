@@ -3,6 +3,6 @@ HTML Parser written in Rust.
 
 -----
 ```toml
-#[dependencies]
+[dependencies]
 tl = "0.1.0"
 ```

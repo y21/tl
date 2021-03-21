@@ -1,5 +1,6 @@
-use std::borrow::Cow;
 use core::{fmt, fmt::Debug};
+use std::borrow::Cow;
+
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BorrowedBytes<'a>(pub &'a [u8]);
