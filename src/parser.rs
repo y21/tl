@@ -9,8 +9,9 @@ macro_rules! str_to_u8_arr {
     }
 }
 
-const END_OF_TAG: &[u8] = &[b'<', b'/'];
-const SELF_CLOSING: &[u8] = &[b'/', b'>'];
+const END_OF_TAG: &[u8] = &[b'<', b'/']; // </p>
+const SELF_CLOSING: &[u8] = &[b'/', b'>']; // <br />
+const COMMENT: &[u8] = &[b'-', b'-']; // <!-- -->
 const VOID_TAGS: &[&[u8]] = str_to_u8_arr! [
     "area",
     "base", 
@@ -29,8 +30,13 @@ const VOID_TAGS: &[&[u8]] = str_to_u8_arr! [
     "wbr"
 ];
 
+mod flags {
+    pub const COMMENT: u32 = 1 << 0;
+}
+
+// TODO: rename to HtmlTag
 pub struct HTMLTag<'a> {
-    _name: &'a [u8],
+    _name: Option<&'a [u8]>,
     _attributes: HashMap<&'a [u8], &'a [u8]>,
     _flags: u32,
     _children: Vec<Node<'a>>,
@@ -39,7 +45,7 @@ pub struct HTMLTag<'a> {
 impl<'a> Debug for HTMLTag<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("HTMLTag")
-            .field("name", &String::from_utf8_lossy(self._name))
+            .field("name", &String::from_utf8_lossy(self._name.unwrap_or(&[b'?'])))
             .field("attributes", &self._attributes)
             .field("flags", &self._flags)
             .field("children", &self._children)
@@ -48,12 +54,31 @@ impl<'a> Debug for HTMLTag<'a> {
 }
 
 impl<'a> HTMLTag<'a> {
-    pub fn new(name: &'a [u8], attr: HashMap<&'a [u8], &'a [u8]>, children: Vec<Node<'a>>) -> Self {
+    // TODO: TagBuilder struct
+    pub fn new(
+        name: Option<&'a [u8]>,
+        attr: HashMap<&'a [u8], &'a [u8]>,
+        children: Vec<Node<'a>>
+    ) -> Self {
         Self {
             _name: name,
             _attributes: attr,
             _children: children,
             _flags: 0,
+        }
+    }
+
+    pub fn with_flags(
+        name: Option<&'a [u8]>,
+        attr: HashMap<&'a [u8], &'a [u8]>,
+        children: Vec<Node<'a>>,
+        flags: u32
+    ) -> Self {
+        Self {
+            _name: name,
+            _attributes: attr,
+            _children: children,
+            _flags: flags
         }
     }
 }
@@ -129,6 +154,30 @@ impl<'a> Parser<'a> {
         None
     }
 
+    fn skip_comment(&mut self) -> Option<&'a [u8]> {
+        let start = self.stream.idx;
+
+        while !self.stream.is_eof() {
+            let idx = self.stream.idx;
+
+            if self.stream.slice_len(idx, COMMENT.len()).eq(COMMENT) {
+                self.stream.idx += COMMENT.len();
+
+                let is_end_of_comment = self.stream.expect_and_skip(b'>')
+                    .map(|c| c == b'>')
+                    .unwrap_or(false);
+                
+                if is_end_of_comment {
+                    return Some(self.stream.slice_unchecked(start, self.stream.idx));
+                }
+            }
+
+            self.stream.idx += 1;
+        }
+
+        None
+    }
+
     fn parse_attribute(&mut self) -> Option<(&'a [u8], &'a [u8])> {
         let name = self.read_ident()?;
         self.skip_whitespaces();
@@ -171,6 +220,40 @@ impl<'a> Parser<'a> {
             self.stream.next()?;
         }
 
+        let markup_declaration = self.stream.expect_and_skip(b'!')
+            .map(|c|c == b'!')
+            .unwrap_or(false);
+
+        if markup_declaration {
+            let is_comment = self.stream.slice(self.stream.idx, self.stream.idx + COMMENT.len())
+                .eq(COMMENT);
+            
+            if is_comment {
+                self.stream.idx += COMMENT.len();
+                println!("skipping");
+                self.skip_comment();
+                println!("skipped, returning none");
+
+                // Comments are ignored, so we return no element
+                // TODO: We need to notify the caller that we actually parsed this element
+                // because returning None should mean that an error occurred while parsing
+                return Some(HTMLTag::with_flags(None,
+                    HashMap::new(),
+                    Vec::new(),
+                    flags::COMMENT));
+            }
+
+            let name = self.read_ident()?.to_ascii_uppercase();
+
+            if name.eq("DOCTYPE".as_bytes()) {
+                // TODO: handle doctype
+                todo!();
+            }
+
+            // TODO: handle the case where <! is neither DOCTYPE nor a comment
+            todo!();
+        }
+
         let name = self.read_ident()?;
 
         let attr = self.parse_attributes();
@@ -190,7 +273,7 @@ impl<'a> Parser<'a> {
 
             // If this is a self-closing tag (e.g. <img />), we want to return early instead of
             // reading children as the next nodes don't belong to this tag
-            return Some(HTMLTag::new(name, attr, children));
+            return Some(HTMLTag::new(Some(name), attr, children));
         }
 
         self.stream.expect_and_skip(b'>')?;
@@ -199,7 +282,7 @@ impl<'a> Parser<'a> {
             // Some HTML tags don't have contents (e.g. <br>),
             // so we need to return early
             // Without it, any following tags would be sub-nodes 
-            return Some(HTMLTag::new(name, attr, children));
+            return Some(HTMLTag::new(Some(name), attr, children));
         }
 
         while !self.stream.is_eof() {
@@ -226,7 +309,7 @@ impl<'a> Parser<'a> {
             children.push(node);
         }
 
-        let tag = HTMLTag::new(name, attr, children);
+        let tag = HTMLTag::new(Some(name), attr, children);
 
         Some(tag)
     }
