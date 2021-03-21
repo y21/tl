@@ -83,7 +83,12 @@ impl<'a, T> Stream<'a, T> {
 
     /// Returns a subslice of this stream but also checks stream length
     /// to prevent out of bounds panicking
-    pub fn slice(&self, from: usize, to: usize) -> &[T] {
+    pub fn slice(&self, from: usize, to: usize) -> &'a [T] {
         &self.data[from..min(self.data.len(), to)]
+    }
+
+    /// Same as slice, but the second argument is how many elements to slice
+    pub fn slice_len(&self, from: usize, len: usize) -> &'a [T] {
+        self.slice(from, self.idx + len)
     }
 }
