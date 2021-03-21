@@ -54,9 +54,9 @@ impl<'a, T> Stream<'a, T> {
 
     /// Returns the next element
     pub fn next(&mut self) -> Option<&T> {
-        self.data.get(self.idx + 1).and_then(|c| {
+        self.data.get(self.idx + 1).map(|c| {
             self.idx += 1;
-            Some(c)
+            c
         })
     }
 
