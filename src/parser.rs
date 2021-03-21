@@ -1,7 +1,7 @@
 use crate::stream::Stream;
 use crate::util;
-use core::{fmt, fmt::Debug};
-use std::{collections::HashMap, fmt::Formatter};
+use crate::bytes::BorrowedBytes;
+use std::{collections::HashMap};
 
 macro_rules! str_to_u8_arr {
     ($($st:expr),*) => {
@@ -35,29 +35,19 @@ mod flags {
 }
 
 // TODO: rename to HtmlTag
+#[derive(Debug)]
 pub struct HTMLTag<'a> {
-    _name: Option<&'a [u8]>,
-    _attributes: HashMap<&'a [u8], &'a [u8]>,
+    _name: Option<BorrowedBytes<'a>>,
+    _attributes: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
     _flags: u32,
-    _children: Vec<Node<'a>>,
-}
-
-impl<'a> Debug for HTMLTag<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("HTMLTag")
-            .field("name", &String::from_utf8_lossy(self._name.unwrap_or(&[b'?'])))
-            .field("attributes", &self._attributes)
-            .field("flags", &self._flags)
-            .field("children", &self._children)
-            .finish()
-    }
+    _children: Vec<Node<'a>>
 }
 
 impl<'a> HTMLTag<'a> {
     // TODO: TagBuilder struct
     pub fn new(
-        name: Option<&'a [u8]>,
-        attr: HashMap<&'a [u8], &'a [u8]>,
+        name: Option<BorrowedBytes<'a>>,
+        attr: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
         children: Vec<Node<'a>>
     ) -> Self {
         Self {
@@ -69,8 +59,8 @@ impl<'a> HTMLTag<'a> {
     }
 
     pub fn with_flags(
-        name: Option<&'a [u8]>,
-        attr: HashMap<&'a [u8], &'a [u8]>,
+        name: Option<BorrowedBytes<'a>>,
+        attr: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
         children: Vec<Node<'a>>,
         flags: u32
     ) -> Self {
@@ -86,7 +76,7 @@ impl<'a> HTMLTag<'a> {
 #[derive(Debug)]
 pub enum Node<'a> {
     Tag(HTMLTag<'a>),
-    Raw(&'a [u8]),
+    Raw(BorrowedBytes<'a>),
 }
 
 pub type Tree<'a> = Vec<Node<'a>>;
@@ -193,7 +183,7 @@ impl<'a> Parser<'a> {
         Some((name, value))
     }
 
-    fn parse_attributes(&mut self) -> HashMap<&'a [u8], &'a [u8]> {
+    fn parse_attributes(&mut self) -> HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>> {
         let mut attr = HashMap::new();
 
         while !self.stream.is_eof() {
@@ -206,7 +196,7 @@ impl<'a> Parser<'a> {
             }
 
             if let Some((k, v)) = self.parse_attribute() {
-                attr.insert(k, v);
+                attr.insert(k.into(), v.into());
             }
 
             self.stream.idx += 1;
@@ -271,7 +261,7 @@ impl<'a> Parser<'a> {
 
             // If this is a self-closing tag (e.g. <img />), we want to return early instead of
             // reading children as the next nodes don't belong to this tag
-            return Some(HTMLTag::new(Some(name), attr, children));
+            return Some(HTMLTag::new(Some(name.into()), attr, children));
         }
 
         self.stream.expect_and_skip(b'>')?;
@@ -280,7 +270,7 @@ impl<'a> Parser<'a> {
             // Some HTML tags don't have contents (e.g. <br>),
             // so we need to return early
             // Without it, any following tags would be sub-nodes 
-            return Some(HTMLTag::new(Some(name), attr, children));
+            return Some(HTMLTag::new(Some(name.into()), attr, children));
         }
 
         while !self.stream.is_eof() {
@@ -307,7 +297,7 @@ impl<'a> Parser<'a> {
             children.push(node);
         }
 
-        let tag = HTMLTag::new(Some(name), attr, children);
+        let tag = HTMLTag::new(Some(name.into()), attr, children);
 
         Some(tag)
     }
@@ -320,8 +310,8 @@ impl<'a> Parser<'a> {
         match ch {
             // TODO: if parse_tag fails (None case), we should probably just interpret it
             // as raw text...
-            b'<' => self.parse_tag(true).and_then(|x| Some(Node::Tag(x))),
-            _ => Some(Node::Raw(self.read_to(&[b'<']))),
+            b'<' => self.parse_tag(true).map(Node::Tag),
+            _ => Some(Node::Raw(self.read_to(&[b'<']).into())),
         }
     }
 
