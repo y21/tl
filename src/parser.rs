@@ -153,9 +153,7 @@ impl<'a> Parser<'a> {
             if self.stream.slice_len(idx, COMMENT.len()).eq(COMMENT) {
                 self.stream.idx += COMMENT.len();
 
-                let is_end_of_comment = self.stream.expect_and_skip(b'>')
-                    .map(|c| c == b'>')
-                    .unwrap_or(false);
+                let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
                 
                 if is_end_of_comment {
                     return Some(self.stream.slice_unchecked(start, self.stream.idx));
@@ -210,9 +208,7 @@ impl<'a> Parser<'a> {
             self.stream.next()?;
         }
 
-        let markup_declaration = self.stream.expect_and_skip(b'!')
-            .map(|c|c == b'!')
-            .unwrap_or(false);
+        let markup_declaration = self.stream.expect_and_skip_cond(b'!');
 
         if markup_declaration {
             let is_comment = self.stream.slice(self.stream.idx, self.stream.idx + COMMENT.len())
@@ -250,9 +246,7 @@ impl<'a> Parser<'a> {
 
         let is_self_closing = self
             .stream
-            .expect_and_skip(b'/')
-            .map(|c| c == b'/')
-            .unwrap_or(false);
+            .expect_and_skip_cond(b'/');
 
         self.skip_whitespaces();
 
