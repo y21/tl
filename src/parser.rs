@@ -1,7 +1,7 @@
+use crate::bytes::BorrowedBytes;
 use crate::stream::Stream;
 use crate::util;
-use crate::bytes::BorrowedBytes;
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 macro_rules! str_to_u8_arr {
     ($($st:expr),*) => {
@@ -12,43 +12,28 @@ macro_rules! str_to_u8_arr {
 const END_OF_TAG: &[u8] = &[b'<', b'/']; // </p>
 const SELF_CLOSING: &[u8] = &[b'/', b'>']; // <br />
 const COMMENT: &[u8] = &[b'-', b'-']; // <!-- -->
-const VOID_TAGS: &[&[u8]] = str_to_u8_arr! [
-    "area",
-    "base", 
-    "br", 
-    "col", 
-    "embed", 
-    "hr", 
-    "img", 
-    "input", 
-    "keygen", 
-    "link", 
-    "meta", 
-    "param", 
-    "source", 
-    "track", 
-    "wbr"
+const VOID_TAGS: &[&[u8]] = str_to_u8_arr![
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "keygen", "link", "meta", "param",
+    "source", "track", "wbr"
 ];
 
 mod flags {
     pub const COMMENT: u32 = 1 << 0;
 }
 
-// TODO: rename to HtmlTag
 #[derive(Debug)]
 pub struct HTMLTag<'a> {
     _name: Option<BorrowedBytes<'a>>,
     _attributes: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
     _flags: u32,
-    _children: Vec<Node<'a>>
+    _children: Vec<Node<'a>>,
 }
 
 impl<'a> HTMLTag<'a> {
-    // TODO: TagBuilder struct
     pub fn new(
         name: Option<BorrowedBytes<'a>>,
         attr: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
-        children: Vec<Node<'a>>
+        children: Vec<Node<'a>>,
     ) -> Self {
         Self {
             _name: name,
@@ -58,18 +43,9 @@ impl<'a> HTMLTag<'a> {
         }
     }
 
-    pub fn with_flags(
-        name: Option<BorrowedBytes<'a>>,
-        attr: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
-        children: Vec<Node<'a>>,
-        flags: u32
-    ) -> Self {
-        Self {
-            _name: name,
-            _attributes: attr,
-            _children: children,
-            _flags: flags
-        }
+    pub fn comment(mut self) -> Self {
+        self._flags |= flags::COMMENT;
+        self
     }
 }
 
@@ -154,7 +130,7 @@ impl<'a> Parser<'a> {
                 self.stream.idx += COMMENT.len();
 
                 let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
-                
+
                 if is_end_of_comment {
                     return Some(self.stream.slice_unchecked(start, self.stream.idx));
                 }
@@ -211,20 +187,17 @@ impl<'a> Parser<'a> {
         let markup_declaration = self.stream.expect_and_skip_cond(b'!');
 
         if markup_declaration {
-            let is_comment = self.stream.slice(self.stream.idx, self.stream.idx + COMMENT.len())
+            let is_comment = self
+                .stream
+                .slice(self.stream.idx, self.stream.idx + COMMENT.len())
                 .eq(COMMENT);
-            
+
             if is_comment {
                 self.stream.idx += COMMENT.len();
                 self.skip_comment();
 
                 // Comments are ignored, so we return no element
-                // TODO: We need to notify the caller that we actually parsed this element
-                // because returning None should mean that an error occurred while parsing
-                return Some(HTMLTag::with_flags(None,
-                    HashMap::new(),
-                    Vec::new(),
-                    flags::COMMENT));
+                return Some(HTMLTag::new(None, HashMap::new(), Vec::new()).comment());
             }
 
             let name = self.read_ident()?.to_ascii_uppercase();
@@ -244,9 +217,7 @@ impl<'a> Parser<'a> {
 
         let mut children = Vec::new();
 
-        let is_self_closing = self
-            .stream
-            .expect_and_skip_cond(b'/');
+        let is_self_closing = self.stream.expect_and_skip_cond(b'/');
 
         self.skip_whitespaces();
 
@@ -263,7 +234,7 @@ impl<'a> Parser<'a> {
         if VOID_TAGS.contains(&name) {
             // Some HTML tags don't have contents (e.g. <br>),
             // so we need to return early
-            // Without it, any following tags would be sub-nodes 
+            // Without it, any following tags would be sub-nodes
             return Some(HTMLTag::new(Some(name.into()), attr, children));
         }
 
@@ -281,7 +252,7 @@ impl<'a> Parser<'a> {
                     return None;
                 }
 
-                self.stream.expect_and_skip(b'>')?;
+                // TODO: do we want to accept the tag if it has no closing tag?
                 break;
             }
 
@@ -309,11 +280,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Tree<'a> {
+    pub fn as_ast(&mut self) -> Tree<'a> {
         let mut tree = Vec::new();
 
-        while let Some(node) = self.parse_single() {
-            tree.push(node);
+        while !self.stream.is_eof() {
+            if let Some(node) = self.parse_single() {
+                tree.push(node);
+            }
         }
 
         tree
