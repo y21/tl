@@ -1,7 +1,7 @@
 use crate::bytes::BorrowedBytes;
 use crate::stream::Stream;
 use crate::util;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 macro_rules! str_to_u8_arr {
     ($($st:expr),*) => {
@@ -26,14 +26,14 @@ pub struct HTMLTag<'a> {
     _name: Option<BorrowedBytes<'a>>,
     _attributes: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
     _flags: u32,
-    _children: Vec<Node<'a>>,
+    _children: Vec<Rc<Node<'a>>>,
 }
 
 impl<'a> HTMLTag<'a> {
     pub fn new(
         name: Option<BorrowedBytes<'a>>,
         attr: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
-        children: Vec<Node<'a>>,
+        children: Vec<Rc<Node<'a>>>,
     ) -> Self {
         Self {
             _name: name,
@@ -55,17 +55,21 @@ pub enum Node<'a> {
     Raw(BorrowedBytes<'a>),
 }
 
-pub type Tree<'a> = Vec<Node<'a>>;
+pub type Tree<'a> = Vec<Rc<Node<'a>>>;
 
 #[derive(Debug)]
 pub struct Parser<'a> {
     stream: Stream<'a, u8>,
+    ids: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>,
+    classes: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>
 }
 
 impl<'a> Parser<'a> {
     pub fn new(input: &str) -> Parser {
         Parser {
             stream: Stream::new(input.as_bytes()),
+            ids: HashMap::new(),
+            classes: HashMap::new()
         }
     }
 
@@ -267,20 +271,22 @@ impl<'a> Parser<'a> {
         Some(tag)
     }
 
-    fn parse_single(&mut self) -> Option<Node<'a>> {
+    fn parse_single(&mut self) -> Option<Rc<Node<'a>>> {
         self.skip_whitespaces();
 
         let ch = self.stream.current_cpy()?;
 
-        match ch {
+        let maybe_node = match ch {
             // TODO: if parse_tag fails (None case), we should probably just interpret it
             // as raw text...
             b'<' => self.parse_tag(true).map(Node::Tag),
             _ => Some(Node::Raw(self.read_to(&[b'<']).into())),
-        }
+        };
+
+        maybe_node.map(Rc::new)
     }
 
-    pub fn as_ast(&mut self) -> Tree<'a> {
+    pub fn ast(mut self) -> Tree<'a> {
         let mut tree = Vec::new();
 
         while !self.stream.is_eof() {
