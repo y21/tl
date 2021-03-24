@@ -30,3 +30,26 @@ impl<'a> BorrowedBytes<'a> {
         String::from_utf8_lossy(self.0)
     }
 }
+
+pub trait AsBytes {
+    fn as_bytes<'a>(&'a self) -> BorrowedBytes<'a>;
+}
+
+impl AsBytes for String {
+    fn as_bytes(&self) -> BorrowedBytes<'_> {
+        BorrowedBytes::from(&self[..])
+    }
+}
+
+macro_rules! asbytes_from_impl {
+    ($t:ty) => {
+        impl AsBytes for $t {
+            fn as_bytes(&self) -> BorrowedBytes<'_> {
+                BorrowedBytes::from(self)
+            }
+        }
+    }
+}
+
+asbytes_from_impl!(str);
+asbytes_from_impl!([u8]);
