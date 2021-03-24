@@ -10,6 +10,6 @@ homepage = "https://github.com/y21/tl"
 readme = "README.md"
 documentation = "https://docs.rs/tl"
 keywords = ["html", "parser"]
-categories = ["parser"]
+categories = ["parser-implementations", "parsing"]
 
 [dependencies]
