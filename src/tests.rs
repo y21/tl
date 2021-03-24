@@ -29,7 +29,24 @@ fn get_element_by_id() {
 
     let tag = dom.get_element_by_id("test").expect("Element not present");
 
-    let el = force_as_tag(&*tag);
+    let el = force_as_tag(&tag);
 
     assert_eq!(el.inner_html().as_utf8_str(), "<p id=\"test\"></p>")
+}
+
+#[test]
+fn html5() {
+    let dom = parse("<!DOCTYPE html> hello");
+
+    assert_eq!(dom.version(), Some(HTMLVersion::HTML5));
+    assert_eq!(dom.children().len(), 1)
+}
+
+#[test]
+fn nested_inner_text() {
+    let dom = parse("<p>hello <p>nested element</p></p>");
+
+    let el = force_as_tag(&dom.children()[0]);
+
+    assert_eq!(el.inner_text(), "hello nested element");
 }
