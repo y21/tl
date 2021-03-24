@@ -1,8 +1,7 @@
 use core::{fmt, fmt::Debug};
 use std::borrow::Cow;
 
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct BorrowedBytes<'a>(pub &'a [u8]);
 
 impl<'a> From<&'a str> for BorrowedBytes<'a> {
@@ -48,7 +47,7 @@ macro_rules! asbytes_from_impl {
                 BorrowedBytes::from(self)
             }
         }
-    }
+    };
 }
 
 asbytes_from_impl!(str);
