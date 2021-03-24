@@ -20,10 +20,6 @@ const VOID_TAGS: &[&[u8]] = str_to_u8_arr![
     "source", "track", "wbr"
 ];
 
-mod flags {
-    pub const COMMENT: u32 = 1 << 0;
-}
-
 #[derive(Debug, Clone)]
 pub struct Attributes<'a> {
     pub raw: HashMap<BorrowedBytes<'a>, Option<BorrowedBytes<'a>>>,
@@ -45,10 +41,8 @@ impl<'a> Attributes<'a> {
 pub struct HTMLTag<'a> {
     _name: Option<BorrowedBytes<'a>>,
     _attributes: Attributes<'a>,
-    _flags: u32,
     _children: Vec<Rc<Node<'a>>>,
-    _start: usize,
-    _end: usize
+    _raw: BorrowedBytes<'a>,
 }
 
 impl<'a> HTMLTag<'a> {
@@ -56,26 +50,22 @@ impl<'a> HTMLTag<'a> {
         name: Option<BorrowedBytes<'a>>,
         attr: Attributes<'a>,
         children: Vec<Rc<Node<'a>>>,
-        start: usize,
-        end: usize
+        raw: BorrowedBytes<'a>,
     ) -> Self {
         Self {
             _name: name,
             _attributes: attr,
             _children: children,
-            _flags: 0,
-            _start: start,
-            _end: end
+            _raw: raw,
         }
     }
 
-    pub(crate) fn add_child(&mut self, c: Rc<Node<'a>>) {
-        self._children.push(c);
+    pub fn inner_html(&self) -> &BorrowedBytes<'a> {
+        &self._raw
     }
 
-    pub(crate) fn comment(mut self) -> Self {
-        self._flags |= flags::COMMENT;
-        self
+    pub fn inner_text(&self) -> &BorrowedBytes<'a> {
+        todo!()
     }
 }
 
@@ -83,7 +73,7 @@ impl<'a> HTMLTag<'a> {
 pub enum Node<'a> {
     Tag(HTMLTag<'a>),
     Raw(BorrowedBytes<'a>),
-    Comment(BorrowedBytes<'a>)
+    Comment(BorrowedBytes<'a>),
 }
 
 pub type Tree<'a> = Vec<Rc<Node<'a>>>;
@@ -231,11 +221,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_tag(&mut self, skip_current: bool) -> Option<Node<'a>> {
+        let start = self.stream.idx;
+
         if skip_current {
             self.stream.next()?;
         }
-
-        let start = self.stream.idx;
 
         let markup_declaration = self.stream.expect_and_skip_cond(b'!');
 
@@ -268,7 +258,7 @@ impl<'a> Parser<'a> {
 
         let attributes = self.parse_attributes();
 
-        let mut element = HTMLTag::new(Some(name.into()), attributes, Vec::new(), start, 0);
+        let mut children = Vec::new();
 
         let is_self_closing = self.stream.expect_and_skip_cond(b'/');
 
@@ -277,22 +267,32 @@ impl<'a> Parser<'a> {
         if is_self_closing {
             self.stream.expect_and_skip(b'>')?;
 
-            element._end = self.stream.idx;
+            let raw = self.stream.slice_from(start);
 
             // If this is a self-closing tag (e.g. <img />), we want to return early instead of
             // reading children as the next nodes don't belong to this tag
-            return Some(Node::Tag(element));
+            return Some(Node::Tag(HTMLTag::new(
+                Some(name.into()),
+                attributes,
+                children,
+                raw.into(),
+            )));
         }
 
         self.stream.expect_and_skip(b'>')?;
 
         if VOID_TAGS.contains(&name) {
-            element._end = self.stream.idx;
+            let raw = self.stream.slice_from(start);
 
             // Some HTML tags don't have contents (e.g. <br>),
             // so we need to return early
             // Without it, any following tags would be sub-nodes
-            return Some(Node::Tag(element));
+            return Some(Node::Tag(HTMLTag::new(
+                Some(name.into()),
+                attributes,
+                children,
+                raw.into(),
+            )));
         }
 
         while !self.stream.is_eof() {
@@ -316,11 +316,17 @@ impl<'a> Parser<'a> {
             // TODO: "partial" JS parser is needed to deal with script tags
             let node = self.parse_single()?;
 
-            element.add_child(node);
+            children.push(node);
         }
 
-        element._end = self.stream.idx;
-        Some(Node::Tag(element))
+        let raw = self.stream.slice_from(start);
+
+        Some(Node::Tag(HTMLTag::new(
+            Some(name.into()),
+            attributes,
+            children,
+            raw.into(),
+        )))
     }
 
     fn parse_single(&mut self) -> Option<Rc<Node<'a>>> {
