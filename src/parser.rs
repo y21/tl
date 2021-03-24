@@ -1,7 +1,7 @@
 use crate::bytes::Bytes;
 use crate::stream::Stream;
 use crate::util;
-use std::{collections::HashMap, rc::Rc};
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
 const OPENING_TAG: u8 = b'<';
 const END_OF_TAG: &[u8] = b"</";
@@ -58,8 +58,37 @@ impl<'a> HTMLTag<'a> {
         &self._raw
     }
 
-    pub fn inner_text(&self) -> &Bytes<'a> {
-        todo!()
+    pub fn inner_text(&self) -> Cow<'a, str> {
+        let len = self._children.len();
+
+        if len == 0 {
+            // If there are no subnodes, we can just return a static, empty, string slice
+            return Cow::Borrowed(""); 
+        }
+
+        let first  = &self._children[0];
+
+        if len == 1 {
+            match &**first {
+                Node::Tag(t) => return t.inner_text(),
+                Node::Raw(e) => return e.as_utf8_str(),
+                Node::Comment(_) => return Cow::Borrowed(""),
+            }
+        }
+
+        // If there are >1 nodes, we need to allocate a new string and push each inner_text in it
+        // TODO: check if String::with_capacity() is worth it
+        let mut s = String::from(first.inner_text());
+
+        for node in self._children.iter().skip(1) {
+            match &**node {
+                Node::Tag(t) => s.push_str(&t.inner_text()),
+                Node::Raw(e) => s.push_str(&e.as_utf8_str()),
+                Node::Comment(_) => { /* no op */},
+            }
+        }
+
+        Cow::Owned(s)
     }
 }
 
@@ -68,6 +97,16 @@ pub enum Node<'a> {
     Tag(HTMLTag<'a>),
     Raw(Bytes<'a>),
     Comment(Bytes<'a>),
+}
+
+impl<'a> Node<'a> {
+    pub fn inner_text(&self) -> Cow<'a, str> {
+        match self {
+            Node::Comment(_) => Cow::Borrowed(""),
+            Node::Raw(r) => r.as_utf8_str(),
+            Node::Tag(t) => t.inner_text()
+        }
+    }
 }
 
 pub type Tree<'a> = Vec<Rc<Node<'a>>>;
@@ -349,7 +388,7 @@ impl<'a> Parser<'a> {
     fn parse_single(&mut self) -> Option<Rc<Node<'a>>> {
         self.skip_whitespaces();
 
-        let ch = self.stream.current_unchecked_cpy();
+        let ch = self.stream.current_cpy()?;
 
         if ch == OPENING_TAG {
             if let Some(tag) = self.parse_tag(true) {
