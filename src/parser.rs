@@ -47,6 +47,8 @@ pub struct HTMLTag<'a> {
     _attributes: Attributes<'a>,
     _flags: u32,
     _children: Vec<Rc<Node<'a>>>,
+    _start: usize,
+    _end: usize
 }
 
 impl<'a> HTMLTag<'a> {
@@ -54,12 +56,16 @@ impl<'a> HTMLTag<'a> {
         name: Option<BorrowedBytes<'a>>,
         attr: Attributes<'a>,
         children: Vec<Rc<Node<'a>>>,
+        start: usize,
+        end: usize
     ) -> Self {
         Self {
             _name: name,
             _attributes: attr,
             _children: children,
             _flags: 0,
+            _start: start,
+            _end: end
         }
     }
 
@@ -77,6 +83,7 @@ impl<'a> HTMLTag<'a> {
 pub enum Node<'a> {
     Tag(HTMLTag<'a>),
     Raw(BorrowedBytes<'a>),
+    Comment(BorrowedBytes<'a>)
 }
 
 pub type Tree<'a> = Vec<Rc<Node<'a>>>;
@@ -223,10 +230,12 @@ impl<'a> Parser<'a> {
         attributes
     }
 
-    fn parse_tag(&mut self, skip_current: bool) -> Option<HTMLTag<'a>> {
+    fn parse_tag(&mut self, skip_current: bool) -> Option<Node<'a>> {
         if skip_current {
             self.stream.next()?;
         }
+
+        let start = self.stream.idx;
 
         let markup_declaration = self.stream.expect_and_skip_cond(b'!');
 
@@ -238,10 +247,10 @@ impl<'a> Parser<'a> {
 
             if is_comment {
                 self.stream.idx += COMMENT.len();
-                self.skip_comment();
+                let comment = self.skip_comment()?;
 
                 // Comments are ignored, so we return no element
-                return Some(HTMLTag::new(None, Attributes::new(), Vec::new()).comment());
+                return Some(Node::Comment(comment.into()));
             }
 
             let name = self.read_ident()?.to_ascii_uppercase();
@@ -259,7 +268,7 @@ impl<'a> Parser<'a> {
 
         let attributes = self.parse_attributes();
 
-        let mut element = HTMLTag::new(Some(name.into()), attributes, Vec::new());
+        let mut element = HTMLTag::new(Some(name.into()), attributes, Vec::new(), start, 0);
 
         let is_self_closing = self.stream.expect_and_skip_cond(b'/');
 
@@ -268,18 +277,22 @@ impl<'a> Parser<'a> {
         if is_self_closing {
             self.stream.expect_and_skip(b'>')?;
 
+            element._end = self.stream.idx;
+
             // If this is a self-closing tag (e.g. <img />), we want to return early instead of
             // reading children as the next nodes don't belong to this tag
-            return Some(element);
+            return Some(Node::Tag(element));
         }
 
         self.stream.expect_and_skip(b'>')?;
 
         if VOID_TAGS.contains(&name) {
+            element._end = self.stream.idx;
+
             // Some HTML tags don't have contents (e.g. <br>),
             // so we need to return early
             // Without it, any following tags would be sub-nodes
-            return Some(element);
+            return Some(Node::Tag(element));
         }
 
         while !self.stream.is_eof() {
@@ -306,7 +319,8 @@ impl<'a> Parser<'a> {
             element.add_child(node);
         }
 
-        Some(element)
+        element._end = self.stream.idx;
+        Some(Node::Tag(element))
     }
 
     fn parse_single(&mut self) -> Option<Rc<Node<'a>>> {
@@ -316,16 +330,18 @@ impl<'a> Parser<'a> {
 
         if ch == OPENING_TAG {
             if let Some(tag) = self.parse_tag(true) {
-                let (id, class) = (tag._attributes.id.clone(), tag._attributes.class.clone());
+                let tag_rc = Rc::new(tag);
 
-                let tag_rc = Rc::new(Node::Tag(tag));
+                if let Node::Tag(tag) = &*tag_rc {
+                    let (id, class) = (&tag._attributes.id, &tag._attributes.class);
 
-                if let Some(id) = id {
-                    self.ids.insert(id, tag_rc.clone());
-                }
+                    if let Some(id) = id {
+                        self.ids.insert(id.clone(), tag_rc.clone());
+                    }
 
-                if let Some(class) = class {
-                    self.classes.insert(class, tag_rc.clone());
+                    if let Some(class) = class {
+                        self.classes.insert(class.clone(), tag_rc.clone());
+                    }
                 }
 
                 Some(tag_rc)
