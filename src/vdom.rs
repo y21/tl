@@ -1,22 +1,15 @@
-use crate::bytes::{AsBytes, BorrowedBytes};
+use crate::{bytes::AsBytes, parser::HTMLVersion};
 use crate::parser::{Node, Parser, Tree};
-use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct VDom<'a> {
-    ast: Tree<'a>,
-    ids: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>,
-    classes: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>,
+    parser: Parser<'a>
 }
 
 impl<'a> From<Parser<'a>> for VDom<'a> {
-    fn from(p: Parser<'a>) -> Self {
-        Self {
-            ast: p.ast,
-            classes: p.classes,
-            ids: p.ids,
-        }
+    fn from(parser: Parser<'a>) -> Self {
+        Self { parser }
     }
 }
 
@@ -27,10 +20,14 @@ impl<'a> VDom<'a> {
     {
         let id = id.as_bytes();
 
-        self.ids.get(&id).cloned()
+        self.parser.ids.get(&id).cloned()
     }
 
     pub fn children(&self) -> &Tree<'a> {
-        &self.ast
+        &self.parser.ast
+    }
+
+    pub fn version(&self) -> Option<HTMLVersion> {
+        self.parser.version
     }
 }
