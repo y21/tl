@@ -10,14 +10,14 @@ Finding an element by its `id` attribute and printing the inner text:
 fn main() {
     let input = r#"<p id="text">Hello</p>"#;
     let dom = tl::parse(input);
-
     let element = dom.get_element_by_id("text").expect("Failed to find element");
 
     println!("Inner text: {}", element.inner_text());
 }
 ```
 
------
+## Usage
+Add `tl` to your dependencies.
 ```toml
 [dependencies]
 tl = "0.1.0"
