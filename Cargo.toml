@@ -3,5 +3,12 @@ name = "tl"
 version = "0.1.0"
 authors = ["y21"]
 edition = "2018"
+license = "MIT"
+description = "html parser written in rust"
+repository = "https://github.com/y21/tl"
+homepage = "https://github.com/y21/tl"
+readme = "https://github.com/y21/tl"
+keywords = ["html", "parser"]
+categories = ["parser"]
 
 [dependencies]
