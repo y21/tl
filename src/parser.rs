@@ -124,7 +124,7 @@ pub struct Parser<'a> {
     pub stream: Stream<'a, u8>,
     pub ast: Tree<'a>,
     pub ids: HashMap<Bytes<'a>, Rc<Node<'a>>>,
-    pub classes: HashMap<Bytes<'a>, Rc<Node<'a>>>,
+    pub classes: HashMap<Bytes<'a>, Vec<Rc<Node<'a>>>>,
     pub version: Option<HTMLVersion>
 }
 
@@ -403,7 +403,9 @@ impl<'a> Parser<'a> {
                     }
 
                     if let Some(class) = class {
-                        self.classes.insert(class.clone(), tag_rc.clone());
+                        self.classes.entry(class.clone())
+                            .or_insert_with(|| Vec::new())
+                            .push(tag_rc.clone());
                     }
                 }
 
