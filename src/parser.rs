@@ -10,19 +10,24 @@ const COMMENT: &[u8] = b"--";
 const ID_ATTR: &[u8] = b"id";
 const CLASS_ATTR: &[u8] = b"class";
 const VOID_TAGS: &[&[u8]] = &[
-    b"area", b"base", b"br", b"col", b"embed", b"hr", b"img", b"input", b"keygen", b"link", b"meta", b"param",
-    b"source", b"track", b"wbr"
+    b"area", b"base", b"br", b"col", b"embed", b"hr", b"img", b"input", b"keygen", b"link",
+    b"meta", b"param", b"source", b"track", b"wbr",
 ];
 
+/// Stores all attributes of an HTML tag, as well as additional metadata such as `id` and `class`
 #[derive(Debug, Clone)]
 pub struct Attributes<'a> {
+    /// Raw attributes (maps attribute key to attribute value)
     pub raw: HashMap<Bytes<'a>, Option<Bytes<'a>>>,
+    /// The ID of this HTML element, if present
     pub id: Option<Bytes<'a>>,
+    /// A list of class names of this HTML element, if present
     pub class: Option<Bytes<'a>>,
 }
 
 impl<'a> Attributes<'a> {
-    pub fn new() -> Self {
+    /// Creates a new `Attributes
+    pub(crate) fn new() -> Self {
         Self {
             raw: HashMap::new(),
             id: None,
@@ -31,6 +36,7 @@ impl<'a> Attributes<'a> {
     }
 }
 
+/// Represents a single HTML element
 #[derive(Debug, Clone)]
 pub struct HTMLTag<'a> {
     _name: Option<Bytes<'a>>,
@@ -40,7 +46,8 @@ pub struct HTMLTag<'a> {
 }
 
 impl<'a> HTMLTag<'a> {
-    pub fn new(
+    /// Creates a new HTMLTag
+    pub(crate) fn new(
         name: Option<Bytes<'a>>,
         attr: Attributes<'a>,
         children: Vec<Rc<Node<'a>>>,
@@ -54,19 +61,25 @@ impl<'a> HTMLTag<'a> {
         }
     }
 
+    /// Returns the contained markup
+    /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
     pub fn inner_html(&self) -> &Bytes<'a> {
         &self._raw
     }
 
+    /// Returns the contained text of this element, excluding any markup
+    /// Equivalent to [Element#innerText](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerText) in browsers)
+    /// This function may not allocate memory for a new string as it can just return the part of the tag that doesn't have markup
+    /// For tags that *do* have more than one subnode, this will allocate memory
     pub fn inner_text(&self) -> Cow<'a, str> {
         let len = self._children.len();
 
         if len == 0 {
             // If there are no subnodes, we can just return a static, empty, string slice
-            return Cow::Borrowed(""); 
+            return Cow::Borrowed("");
         }
 
-        let first  = &self._children[0];
+        let first = &self._children[0];
 
         if len == 1 {
             match &**first {
@@ -84,7 +97,7 @@ impl<'a> HTMLTag<'a> {
             match &**node {
                 Node::Tag(t) => s.push_str(&t.inner_text()),
                 Node::Raw(e) => s.push_str(&e.as_utf8_str()),
-                Node::Comment(_) => { /* no op */},
+                Node::Comment(_) => { /* no op */ }
             }
         }
 
@@ -92,31 +105,42 @@ impl<'a> HTMLTag<'a> {
     }
 }
 
+/// An HTML Node
 #[derive(Debug, Clone)]
 pub enum Node<'a> {
+    /// A regular HTML element/tag
     Tag(HTMLTag<'a>),
+    /// Raw text (no particular HTML element)
     Raw(Bytes<'a>),
+    /// Comment (<!-- -->)
     Comment(Bytes<'a>),
 }
 
 impl<'a> Node<'a> {
+    /// Returns the inner text of this node
     pub fn inner_text(&self) -> Cow<'a, str> {
         match self {
             Node::Comment(_) => Cow::Borrowed(""),
             Node::Raw(r) => r.as_utf8_str(),
-            Node::Tag(t) => t.inner_text()
+            Node::Tag(t) => t.inner_text(),
         }
     }
 }
 
+/// A list of shared HTML nodes
 pub type Tree<'a> = Vec<Rc<Node<'a>>>;
 
+/// HTML Version (<!DOCTYPE>)
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum HTMLVersion {
+    /// HTML Version 5
     HTML5,
+    /// Strict HTML 4.01
     StrictHTML401,
+    /// Transitional HTML 4.01
     TransitionalHTML401,
-    FramesetHTML401
+    /// Frameset HTML 4.01:
+    FramesetHTML401,
 }
 
 #[derive(Debug)]
@@ -125,7 +149,7 @@ pub struct Parser<'a> {
     pub ast: Tree<'a>,
     pub ids: HashMap<Bytes<'a>, Rc<Node<'a>>>,
     pub classes: HashMap<Bytes<'a>, Vec<Rc<Node<'a>>>>,
-    pub version: Option<HTMLVersion>
+    pub version: Option<HTMLVersion>,
 }
 
 impl<'a> Parser<'a> {
@@ -135,7 +159,7 @@ impl<'a> Parser<'a> {
             ast: Vec::new(),
             ids: HashMap::new(),
             classes: HashMap::new(),
-            version: None
+            version: None,
         }
     }
 
@@ -291,7 +315,8 @@ impl<'a> Parser<'a> {
             if name.eq(b"DOCTYPE") {
                 self.skip_whitespaces();
 
-                let is_html5 = self.read_ident()
+                let is_html5 = self
+                    .read_ident()
                     .map(|ident| ident.to_ascii_uppercase().eq(b"HTML"))
                     .unwrap_or(false);
 
@@ -302,7 +327,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // TODO: handle DOCTYPE for HTML version <5?
-                
+
                 return None;
             }
 
@@ -403,7 +428,8 @@ impl<'a> Parser<'a> {
                     }
 
                     if let Some(class) = class {
-                        self.classes.entry(class.clone())
+                        self.classes
+                            .entry(class.clone())
                             .or_insert_with(|| Vec::new())
                             .push(tag_rc.clone());
                     }
@@ -418,7 +444,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(mut self) -> Parser<'a> {
+    pub(crate) fn parse(mut self) -> Parser<'a> {
         while !self.stream.is_eof() {
             if let Some(node) = self.parse_single() {
                 self.ast.push(node);

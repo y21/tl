@@ -1,6 +1,9 @@
 use core::{fmt, fmt::Debug};
 use std::borrow::Cow;
 
+/// A wrapper around a DST-slice
+/// It implements the `Debug` trait which displays the data as a UTF8 string,
+/// to make it easier to read for humans when logging
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct Bytes<'a>(&'a [u8]);
 
@@ -18,23 +21,25 @@ impl<'a> From<&'a [u8]> for Bytes<'a> {
 
 impl<'a> Debug for Bytes<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Bytes")
-            .field(&self.as_utf8_str())
-            .finish()
+        f.debug_tuple("Bytes").field(&self.as_utf8_str()).finish()
     }
 }
 
 impl<'a> Bytes<'a> {
+    /// Convenient method for lossy-encoding the data as UTF8
     pub fn as_utf8_str(&self) -> Cow<'a, str> {
         String::from_utf8_lossy(self.0)
     }
 
+    /// Returns the raw data wrapped by this struct
     pub fn raw(&self) -> &'a [u8] {
         self.0
     }
 }
 
+/// A trait for converting a type into Bytes
 pub trait AsBytes {
+    /// Converts `self` to `Bytes`
     fn as_bytes<'a>(&'a self) -> Bytes<'a>;
 }
 

@@ -1,5 +1,6 @@
 use std::cmp::min;
 
+/// Internal struct for iterating over input bytes
 #[derive(Debug)]
 pub struct Stream<'a, T> {
     pub idx: usize,
