@@ -21,7 +21,7 @@ impl<'a> From<Parser<'a>> for VDom<'a> {
 }
 
 impl<'a> VDom<'a> {
-    pub fn get_element_by_id<S>(&'a self, id: S) -> Option<Rc<Node<'a>>>
+    pub fn get_element_by_id<S: ?Sized>(&'a self, id: &S) -> Option<Rc<Node<'a>>>
     where
         S: AsBytes,
     {
