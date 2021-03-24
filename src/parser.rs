@@ -366,6 +366,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // TODO: do we want to accept the tag if it has no closing tag?
+                self.stream.expect_and_skip(b'>');
                 break;
             }
 
