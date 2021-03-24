@@ -2,8 +2,6 @@ use core::{fmt, fmt::Debug};
 use std::borrow::Cow;
 
 /// A wrapper around a DST-slice
-/// It implements the `Debug` trait which displays the data as a UTF8 string,
-/// to make it easier to read for humans when logging
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct Bytes<'a>(&'a [u8]);
 
@@ -19,6 +17,8 @@ impl<'a> From<&'a [u8]> for Bytes<'a> {
     }
 }
 
+/// Custom `Debug` trait is implemented which displays the data as a UTF8 string,
+/// to make it easier to read for humans when logging
 impl<'a> Debug for Bytes<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Bytes").field(&self.as_utf8_str()).finish()

@@ -37,6 +37,7 @@ pub use parser::{Attributes, HTMLTag, HTMLVersion, Node, Tree};
 pub use vdom::VDom;
 
 /// Parses the given input string
+/// 
 /// This is the "entry point" and function you will call to parse HTML
 pub fn parse(input: &str) -> VDom<'_> {
     VDom::from(Parser::new(input).parse())
