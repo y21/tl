@@ -9,9 +9,12 @@ macro_rules! str_to_u8_arr {
     }
 }
 
+const OPENING_TAG: u8 = b'<';
 const END_OF_TAG: &[u8] = &[b'<', b'/']; // </p>
 const SELF_CLOSING: &[u8] = &[b'/', b'>']; // <br />
 const COMMENT: &[u8] = &[b'-', b'-']; // <!-- -->
+const ID_ATTR: &[u8] = "id".as_bytes();
+const CLASS_ATTR: &[u8] = "class".as_bytes();
 const VOID_TAGS: &[&[u8]] = str_to_u8_arr![
     "area", "base", "br", "col", "embed", "hr", "img", "input", "keygen", "link", "meta", "param",
     "source", "track", "wbr"
@@ -21,10 +24,27 @@ mod flags {
     pub const COMMENT: u32 = 1 << 0;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct Attributes<'a> {
+    pub raw: HashMap<BorrowedBytes<'a>, Option<BorrowedBytes<'a>>>,
+    pub id: Option<BorrowedBytes<'a>>,
+    pub class: Option<BorrowedBytes<'a>>,
+}
+
+impl<'a> Attributes<'a> {
+    pub fn new() -> Self {
+        Self {
+            raw: HashMap::new(),
+            id: None,
+            class: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct HTMLTag<'a> {
     _name: Option<BorrowedBytes<'a>>,
-    _attributes: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
+    _attributes: Attributes<'a>,
     _flags: u32,
     _children: Vec<Rc<Node<'a>>>,
 }
@@ -32,7 +52,7 @@ pub struct HTMLTag<'a> {
 impl<'a> HTMLTag<'a> {
     pub fn new(
         name: Option<BorrowedBytes<'a>>,
-        attr: HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>>,
+        attr: Attributes<'a>,
         children: Vec<Rc<Node<'a>>>,
     ) -> Self {
         Self {
@@ -43,13 +63,17 @@ impl<'a> HTMLTag<'a> {
         }
     }
 
-    pub fn comment(mut self) -> Self {
+    pub(crate) fn add_child(&mut self, c: Rc<Node<'a>>) {
+        self._children.push(c);
+    }
+
+    pub(crate) fn comment(mut self) -> Self {
         self._flags |= flags::COMMENT;
         self
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node<'a> {
     Tag(HTMLTag<'a>),
     Raw(BorrowedBytes<'a>),
@@ -59,17 +83,19 @@ pub type Tree<'a> = Vec<Rc<Node<'a>>>;
 
 #[derive(Debug)]
 pub struct Parser<'a> {
-    stream: Stream<'a, u8>,
-    ids: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>,
-    classes: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>
+    pub stream: Stream<'a, u8>,
+    pub ast: Tree<'a>,
+    pub ids: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>,
+    pub classes: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(input: &str) -> Parser {
         Parser {
             stream: Stream::new(input.as_bytes()),
+            ast: Vec::new(),
             ids: HashMap::new(),
-            classes: HashMap::new()
+            classes: HashMap::new(),
         }
     }
 
@@ -146,23 +172,25 @@ impl<'a> Parser<'a> {
         None
     }
 
-    fn parse_attribute(&mut self) -> Option<(&'a [u8], &'a [u8])> {
+    fn parse_attribute(&mut self) -> Option<(&'a [u8], Option<&'a [u8]>)> {
         let name = self.read_ident()?;
         self.skip_whitespaces();
 
-        // TODO: allow attributes with no value?
-        self.stream.expect_and_skip(b'=')?;
+        let has_value = self.stream.expect_and_skip_cond(b'=');
+        if !has_value {
+            return Some((name, None));
+        }
 
         self.skip_whitespaces();
         let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\''])?;
 
         let value = self.read_to(&[quote]);
 
-        Some((name, value))
+        Some((name, Some(value)))
     }
 
-    fn parse_attributes(&mut self) -> HashMap<BorrowedBytes<'a>, BorrowedBytes<'a>> {
-        let mut attr = HashMap::new();
+    fn parse_attributes(&mut self) -> Attributes<'a> {
+        let mut attributes = Attributes::new();
 
         while !self.stream.is_eof() {
             self.skip_whitespaces();
@@ -174,13 +202,25 @@ impl<'a> Parser<'a> {
             }
 
             if let Some((k, v)) = self.parse_attribute() {
-                attr.insert(k.into(), v.into());
+                // `id` and `class` attributes need to be handled manually,
+                // as we're going to store them in a HashMap so `get_element_by_id` is O(1)
+
+                let v: Option<BorrowedBytes<'a>> = v.map(Into::into);
+
+                if k.eq(ID_ATTR) {
+                    attributes.id = v.clone();
+                } else if k.eq(CLASS_ATTR) {
+                    // TODO: This isn't correct - `class` attribute is space delimited
+                    attributes.class = v.clone();
+                }
+
+                attributes.raw.insert(k.into(), v);
             }
 
             self.stream.idx += 1;
         }
 
-        attr
+        attributes
     }
 
     fn parse_tag(&mut self, skip_current: bool) -> Option<HTMLTag<'a>> {
@@ -201,7 +241,7 @@ impl<'a> Parser<'a> {
                 self.skip_comment();
 
                 // Comments are ignored, so we return no element
-                return Some(HTMLTag::new(None, HashMap::new(), Vec::new()).comment());
+                return Some(HTMLTag::new(None, Attributes::new(), Vec::new()).comment());
             }
 
             let name = self.read_ident()?.to_ascii_uppercase();
@@ -212,14 +252,14 @@ impl<'a> Parser<'a> {
             }
 
             // TODO: handle the case where <! is neither DOCTYPE nor a comment
-            todo!();
+            return None;
         }
 
         let name = self.read_ident()?;
 
-        let attr = self.parse_attributes();
+        let attributes = self.parse_attributes();
 
-        let mut children = Vec::new();
+        let mut element = HTMLTag::new(Some(name.into()), attributes, Vec::new());
 
         let is_self_closing = self.stream.expect_and_skip_cond(b'/');
 
@@ -230,7 +270,7 @@ impl<'a> Parser<'a> {
 
             // If this is a self-closing tag (e.g. <img />), we want to return early instead of
             // reading children as the next nodes don't belong to this tag
-            return Some(HTMLTag::new(Some(name.into()), attr, children));
+            return Some(element);
         }
 
         self.stream.expect_and_skip(b'>')?;
@@ -239,7 +279,7 @@ impl<'a> Parser<'a> {
             // Some HTML tags don't have contents (e.g. <br>),
             // so we need to return early
             // Without it, any following tags would be sub-nodes
-            return Some(HTMLTag::new(Some(name.into()), attr, children));
+            return Some(element);
         }
 
         while !self.stream.is_eof() {
@@ -263,38 +303,46 @@ impl<'a> Parser<'a> {
             // TODO: "partial" JS parser is needed to deal with script tags
             let node = self.parse_single()?;
 
-            children.push(node);
+            element.add_child(node);
         }
 
-        let tag = HTMLTag::new(Some(name.into()), attr, children);
-
-        Some(tag)
+        Some(element)
     }
 
     fn parse_single(&mut self) -> Option<Rc<Node<'a>>> {
         self.skip_whitespaces();
 
-        let ch = self.stream.current_cpy()?;
+        let ch = self.stream.current_unchecked_cpy();
 
-        let maybe_node = match ch {
-            // TODO: if parse_tag fails (None case), we should probably just interpret it
-            // as raw text...
-            b'<' => self.parse_tag(true).map(Node::Tag),
-            _ => Some(Node::Raw(self.read_to(&[b'<']).into())),
-        };
+        if ch == OPENING_TAG {
+            if let Some(tag) = self.parse_tag(true) {
+                let (id, class) = (tag._attributes.id.clone(), tag._attributes.class.clone());
 
-        maybe_node.map(Rc::new)
+                let tag_rc = Rc::new(Node::Tag(tag));
+
+                if let Some(id) = id {
+                    self.ids.insert(id, tag_rc.clone());
+                }
+
+                if let Some(class) = class {
+                    self.classes.insert(class, tag_rc.clone());
+                }
+
+                Some(tag_rc)
+            } else {
+                None
+            }
+        } else {
+            Some(Rc::new(Node::Raw(self.read_to(&[b'<']).into())))
+        }
     }
 
-    pub fn ast(mut self) -> Tree<'a> {
-        let mut tree = Vec::new();
-
+    pub fn parse(mut self) -> Parser<'a> {
         while !self.stream.is_eof() {
             if let Some(node) = self.parse_single() {
-                tree.push(node);
+                self.ast.push(node);
             }
         }
-
-        tree
+        self
     }
 }
