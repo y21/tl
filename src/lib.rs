@@ -1,10 +1,10 @@
 mod bytes;
 mod parser;
 mod stream;
-mod util;
-mod vdom;
 #[cfg(test)]
 mod tests;
+mod util;
+mod vdom;
 
 use parser::Parser;
 use vdom::VDom;

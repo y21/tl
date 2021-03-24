@@ -1,5 +1,5 @@
-// For tests, we just import everything
-use crate::*;
+use crate::parse;
+use crate::parser::*;
 
 fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
     match actual {
