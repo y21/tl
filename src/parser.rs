@@ -1,30 +1,24 @@
-use crate::bytes::BorrowedBytes;
+use crate::bytes::Bytes;
 use crate::stream::Stream;
 use crate::util;
 use std::{collections::HashMap, rc::Rc};
 
-macro_rules! str_to_u8_arr {
-    ($($st:expr),*) => {
-        &[$($st.as_bytes()),*]
-    }
-}
-
 const OPENING_TAG: u8 = b'<';
-const END_OF_TAG: &[u8] = &[b'<', b'/']; // </p>
-const SELF_CLOSING: &[u8] = &[b'/', b'>']; // <br />
-const COMMENT: &[u8] = &[b'-', b'-']; // <!-- -->
-const ID_ATTR: &[u8] = "id".as_bytes();
-const CLASS_ATTR: &[u8] = "class".as_bytes();
-const VOID_TAGS: &[&[u8]] = str_to_u8_arr![
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "keygen", "link", "meta", "param",
-    "source", "track", "wbr"
+const END_OF_TAG: &[u8] = b"</";
+const SELF_CLOSING: &[u8] = b"/>";
+const COMMENT: &[u8] = b"--";
+const ID_ATTR: &[u8] = b"id";
+const CLASS_ATTR: &[u8] = b"class";
+const VOID_TAGS: &[&[u8]] = &[
+    b"area", b"base", b"br", b"col", b"embed", b"hr", b"img", b"input", b"keygen", b"link", b"meta", b"param",
+    b"source", b"track", b"wbr"
 ];
 
 #[derive(Debug, Clone)]
 pub struct Attributes<'a> {
-    pub raw: HashMap<BorrowedBytes<'a>, Option<BorrowedBytes<'a>>>,
-    pub id: Option<BorrowedBytes<'a>>,
-    pub class: Option<BorrowedBytes<'a>>,
+    pub raw: HashMap<Bytes<'a>, Option<Bytes<'a>>>,
+    pub id: Option<Bytes<'a>>,
+    pub class: Option<Bytes<'a>>,
 }
 
 impl<'a> Attributes<'a> {
@@ -39,18 +33,18 @@ impl<'a> Attributes<'a> {
 
 #[derive(Debug, Clone)]
 pub struct HTMLTag<'a> {
-    _name: Option<BorrowedBytes<'a>>,
+    _name: Option<Bytes<'a>>,
     _attributes: Attributes<'a>,
     _children: Vec<Rc<Node<'a>>>,
-    _raw: BorrowedBytes<'a>,
+    _raw: Bytes<'a>,
 }
 
 impl<'a> HTMLTag<'a> {
     pub fn new(
-        name: Option<BorrowedBytes<'a>>,
+        name: Option<Bytes<'a>>,
         attr: Attributes<'a>,
         children: Vec<Rc<Node<'a>>>,
-        raw: BorrowedBytes<'a>,
+        raw: Bytes<'a>,
     ) -> Self {
         Self {
             _name: name,
@@ -60,11 +54,11 @@ impl<'a> HTMLTag<'a> {
         }
     }
 
-    pub fn inner_html(&self) -> &BorrowedBytes<'a> {
+    pub fn inner_html(&self) -> &Bytes<'a> {
         &self._raw
     }
 
-    pub fn inner_text(&self) -> &BorrowedBytes<'a> {
+    pub fn inner_text(&self) -> &Bytes<'a> {
         todo!()
     }
 }
@@ -72,18 +66,27 @@ impl<'a> HTMLTag<'a> {
 #[derive(Debug, Clone)]
 pub enum Node<'a> {
     Tag(HTMLTag<'a>),
-    Raw(BorrowedBytes<'a>),
-    Comment(BorrowedBytes<'a>),
+    Raw(Bytes<'a>),
+    Comment(Bytes<'a>),
 }
 
 pub type Tree<'a> = Vec<Rc<Node<'a>>>;
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum HTMLVersion {
+    HTML5,
+    StrictHTML401,
+    TransitionalHTML401,
+    FramesetHTML401
+}
 
 #[derive(Debug)]
 pub struct Parser<'a> {
     pub stream: Stream<'a, u8>,
     pub ast: Tree<'a>,
-    pub ids: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>,
-    pub classes: HashMap<BorrowedBytes<'a>, Rc<Node<'a>>>,
+    pub ids: HashMap<Bytes<'a>, Rc<Node<'a>>>,
+    pub classes: HashMap<Bytes<'a>, Rc<Node<'a>>>,
+    pub version: Option<HTMLVersion>
 }
 
 impl<'a> Parser<'a> {
@@ -93,6 +96,7 @@ impl<'a> Parser<'a> {
             ast: Vec::new(),
             ids: HashMap::new(),
             classes: HashMap::new(),
+            version: None
         }
     }
 
@@ -202,7 +206,7 @@ impl<'a> Parser<'a> {
                 // `id` and `class` attributes need to be handled manually,
                 // as we're going to store them in a HashMap so `get_element_by_id` is O(1)
 
-                let v: Option<BorrowedBytes<'a>> = v.map(Into::into);
+                let v: Option<Bytes<'a>> = v.map(Into::into);
 
                 if k.eq(ID_ATTR) {
                     attributes.id = v.clone();
@@ -245,9 +249,22 @@ impl<'a> Parser<'a> {
 
             let name = self.read_ident()?.to_ascii_uppercase();
 
-            if name.eq("DOCTYPE".as_bytes()) {
-                // TODO: handle doctype
-                todo!();
+            if name.eq(b"DOCTYPE") {
+                self.skip_whitespaces();
+
+                let is_html5 = self.read_ident()
+                    .map(|ident| ident.to_ascii_uppercase().eq(b"HTML"))
+                    .unwrap_or(false);
+
+                if is_html5 {
+                    self.version = Some(HTMLVersion::HTML5);
+                    self.skip_whitespaces();
+                    self.stream.expect_and_skip(b'>')?;
+                }
+
+                // TODO: handle DOCTYPE for HTML version <5?
+                
+                return None;
             }
 
             // TODO: handle the case where <! is neither DOCTYPE nor a comment
