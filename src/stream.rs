@@ -98,4 +98,9 @@ impl<'a, T> Stream<'a, T> {
     pub fn slice_len(&self, from: usize, len: usize) -> &'a [T] {
         self.slice(from, self.idx + len)
     }
+
+    /// Same as slice, but uses the current index + 1 as `to`
+    pub fn slice_from(&self, from: usize) -> &'a [T] {
+        self.slice(from, self.idx + 1)
+    }
 }
