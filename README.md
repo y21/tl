@@ -20,6 +20,6 @@ fn main() {
 Add `tl` to your dependencies.
 ```toml
 [dependencies]
-tl = "0.1.0"
+tl = "0.1.1"
 ```
 
