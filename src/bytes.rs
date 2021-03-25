@@ -49,6 +49,12 @@ impl AsBytes for String {
     }
 }
 
+impl<'a> AsBytes for Bytes<'a> {
+    fn as_bytes(&self) -> Bytes<'a> {
+        self.clone()
+    }
+}
+
 macro_rules! asbytes_from_impl {
     ($t:ty) => {
         impl AsBytes for $t {
