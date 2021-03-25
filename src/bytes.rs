@@ -40,7 +40,7 @@ impl<'a> Bytes<'a> {
 /// A trait for converting a type into Bytes
 pub trait AsBytes {
     /// Converts `self` to `Bytes`
-    fn as_bytes<'a>(&'a self) -> Bytes<'a>;
+    fn as_bytes(&self) -> Bytes<'_>;
 }
 
 impl AsBytes for String {

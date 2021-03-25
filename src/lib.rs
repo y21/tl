@@ -7,14 +7,12 @@
 //! ## Examples
 //! Finding an element by its `id` attribute and printing the inner text:
 //! ```rust
-//! fn main() {
-//!     let input = r#"<p id="text">Hello</p>"#;
-//!     let dom = tl::parse(input);
+//! let input = r#"<p id="text">Hello</p>"#;
+//! let dom = tl::parse(input);
 //!
-//!     let element = dom.get_element_by_id("text").expect("Failed to find element");
+//! let element = dom.get_element_by_id("text").expect("Failed to find element");
 //!
-//!     println!("Inner text: {}", element.inner_text());
-//! }
+//! println!("Inner text: {}", element.inner_text());
 //! ```
 //!
 //! ## Bytes

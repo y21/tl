@@ -460,10 +460,10 @@ impl<'a> Parser<'a> {
                 };
 
                 let slice = stream.slice(last, idx);
-                if slice.len() > 0 {
+                if !slice.is_empty() {
                     self.classes
                         .entry(slice.into())
-                        .or_insert_with(|| Vec::new())
+                        .or_insert_with(Vec::new)
                         .push(element.clone());
                 }
 
