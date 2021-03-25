@@ -20,7 +20,7 @@ fn inner_html() {
 #[test]
 fn children_len() {
     let dom = parse("<!-- element 1 --> <div><div>element 3</div></div>");
-    assert_eq!(dom.children().len(), 3);
+    assert_eq!(dom.children().len(), 2);
 }
 
 #[test]

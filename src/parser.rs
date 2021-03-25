@@ -274,7 +274,6 @@ impl<'a> Parser<'a> {
                 if k.eq(ID_ATTR) {
                     attributes.id = v.clone();
                 } else if k.eq(CLASS_ATTR) {
-                    // TODO: This isn't correct - `class` attribute is space delimited
                     attributes.class = v.clone();
                 }
 
@@ -428,10 +427,7 @@ impl<'a> Parser<'a> {
                     }
 
                     if let Some(class) = class {
-                        self.classes
-                            .entry(class.clone())
-                            .or_insert_with(|| Vec::new())
-                            .push(tag_rc.clone());
+                        self.process_class(class, tag_rc.clone());
                     }
                 }
 
@@ -441,6 +437,40 @@ impl<'a> Parser<'a> {
             }
         } else {
             Some(Rc::new(Node::Raw(self.read_to(&[b'<']).into())))
+        }
+    }
+
+    fn process_class(&mut self, class: &Bytes<'a>, element: Rc<Node<'a>>) {
+        let raw = class.raw();
+
+        let mut stream = Stream::new(raw);
+
+        let mut last = 0;
+
+        while !stream.is_eof() {
+            let cur = stream.current_unchecked();
+
+            let is_last_char = stream.idx == raw.len() - 1;
+
+            if util::is_strict_whitespace(*cur) || is_last_char {
+                let idx = if is_last_char {
+                    stream.idx + 1
+                } else {
+                    stream.idx
+                };
+
+                let slice = stream.slice(last, idx);
+                if !slice.is_empty() {
+                    self.classes
+                        .entry(slice.into())
+                        .or_insert_with(Vec::new)
+                        .push(element.clone());
+                }
+
+                last = idx + 1;
+            }
+
+            stream.idx += 1;
         }
     }
 
