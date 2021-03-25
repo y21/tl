@@ -2,7 +2,7 @@
 //!
 //! It does minimal to no copying during parsing by borrowing parts of the input string.
 //! Additionally, it keeps track of parsed elements and stores elements with an `id` attribute
-//! in an internal HashMap, which makes `get_element_by_id` as well as `get_elements_by_class_name` very fast (`O(1)`).
+//! in an internal HashMap, which makes element lookups by ID/class name very fast.
 //!
 //! ## Examples
 //! Finding an element by its `id` attribute and printing the inner text:
