@@ -102,6 +102,6 @@ impl<'a, T> Stream<'a, T> {
 
     /// Same as slice, but uses the current index + 1 as `to`
     pub fn slice_from(&self, from: usize) -> &'a [T] {
-        self.slice(from, self.idx + 1)
+        self.slice(from, self.idx)
     }
 }
