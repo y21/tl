@@ -1,6 +1,6 @@
 use crate::parser::{Node, Parser, Tree};
 use crate::{bytes::AsBytes, parser::HTMLVersion};
-use std::rc::Rc;
+use std::{marker::PhantomData, rc::Rc};
 
 /// VDom represents a [Document Object Model](https://developer.mozilla.org/en/docs/Web/API/Document_Object_Model)
 #[derive(Debug)]
@@ -44,5 +44,58 @@ impl<'a> VDom<'a> {
     /// This is determined by the `<!DOCTYPE>` tag
     pub fn version(&self) -> Option<HTMLVersion> {
         self.parser.version
+    }
+}
+
+
+/// A RAII guarded version of VDom
+///
+/// The input string is freed once this struct goes out of scope.
+/// The only way to construct this is by calling `parse_owned()`.
+#[derive(Debug)]
+pub struct VDomGuard<'a> {
+    /// Pointer to leaked input string
+    ptr: *mut str,
+    /// Wrapped VDom instance
+    dom: VDom<'a>,
+    /// PhantomData for self.dom
+    _phantom: PhantomData<&'a str>
+}
+
+// SAFETY: The string is leaked and pinned to a memory location
+unsafe impl<'a> Send for VDomGuard<'a> {}
+unsafe impl<'a> Sync for VDomGuard<'a> {}
+
+impl<'a> VDomGuard<'a> {
+    /// Parses the input string
+    pub(crate) fn parse(input: String) -> VDomGuard<'a> {
+        let ptr = Box::into_raw(input.into_boxed_str());
+
+        // SAFETY: Shortening the lifetime of the input string is fine, as it's `'static`
+        let input_extended: &'a str = unsafe { std::mem::transmute(ptr) };
+
+        let parser = Parser::new(input_extended).parse();
+
+        Self {
+            ptr,
+            dom: VDom::from(parser),
+            _phantom: PhantomData
+        }
+    }
+}
+
+impl<'a> VDomGuard<'a> {
+    /// Returns a reference to the inner DOM.
+    ///
+    /// The lifetime of `VDOM` is bound to self so that elements cannot outlive this `VDomGuard` struct.
+    pub fn get_ref<'b>(&'a self) -> &'b VDom<'a> {
+        &self.dom
+    }
+}
+
+impl<'a> Drop for VDomGuard<'a> {
+    fn drop(&mut self) {
+        // SAFETY: We made this pointer in VDomGuard::parse() so we know it is properly aligned and non-null
+        drop(unsafe { Box::from_raw(self.ptr) });
     }
 }
