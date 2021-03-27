@@ -47,6 +47,10 @@ impl<'a, T: Eq + Copy> Stream<'a, T> {
             .map(|c| c == expect)
             .unwrap_or(false)
     }
+
+    pub fn is_next(&self, expect: T) -> bool {
+        self.peek().map(|x| *x == expect).unwrap_or(false)
+    }
 }
 
 impl<'a, T> Stream<'a, T> {
@@ -66,6 +70,10 @@ impl<'a, T> Stream<'a, T> {
             self.idx += 1;
             c
         })
+    }
+
+    pub fn peek(&self) -> Option<&T> {
+        self.data.get(self.idx + 1)
     }
 
     /// Returns the current element, but panicks if out of bounds

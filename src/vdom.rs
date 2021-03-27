@@ -1,4 +1,4 @@
-use crate::parser::{Node, Parser, Tree};
+use crate::{Node, Parser, Tree};
 use crate::{bytes::AsBytes, parser::HTMLVersion};
 use std::{marker::PhantomData, rc::Rc};
 
@@ -47,7 +47,6 @@ impl<'a> VDom<'a> {
     }
 }
 
-
 /// A RAII guarded version of VDom
 ///
 /// The input string is freed once this struct goes out of scope.
@@ -59,7 +58,7 @@ pub struct VDomGuard<'a> {
     /// Wrapped VDom instance
     dom: VDom<'a>,
     /// PhantomData for self.dom
-    _phantom: PhantomData<&'a str>
+    _phantom: PhantomData<&'a str>,
 }
 
 // SAFETY: The string is leaked and pinned to a memory location
@@ -72,14 +71,14 @@ impl<'a> VDomGuard<'a> {
         let ptr = Box::into_raw(input.into_boxed_str());
 
         // SAFETY: Shortening the lifetime of the input string is fine, as it's `'static`
-        let input_extended: &'a str = unsafe { std::mem::transmute(ptr) };
+        let input_extended: &'a str = unsafe { &*ptr };
 
         let parser = Parser::new(input_extended).parse();
 
         Self {
             ptr,
             dom: VDom::from(parser),
-            _phantom: PhantomData
+            _phantom: PhantomData,
         }
     }
 }

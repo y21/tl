@@ -22,14 +22,14 @@
 //! `VDomGuard` takes ownership over the string, which means you don't have to keep the string around.
 //! ```rust
 //! // Notice how it takes ownership over the string:
-//! let dom_guard = tl::parse_owned(String::from(r#"<p id="text">Hello</p>"#));
-//! 
+//! let dom_guard = unsafe { tl::parse_owned(String::from(r#"<p id="text">Hello</p>"#)) };
+//!
 //! // Obtain reference to underlying VDom
 //! let dom = dom_guard.get_ref();
-//! 
+//!
 //! // Now, use `dom` as you would if it was a regular `VDom`
 //! let element = dom.get_element_by_id("text").expect("Failed to find element");
-//! 
+//!
 //! println!("Inner text: {}", element.inner_text());
 //! ```
 //!
@@ -49,11 +49,11 @@ mod vdom;
 
 pub use bytes::{AsBytes, Bytes};
 use parser::Parser;
-pub use parser::{Attributes, HTMLTag, HTMLVersion, Node, Tree};
+pub use parser::{tag::Attributes, tag::HTMLTag, HTMLVersion, tag::Node, Tree};
 pub use vdom::{VDom, VDomGuard};
 
 /// Parses the given input string
-/// 
+///
 /// This is the "entry point" and function you will call to parse HTML.
 /// The input string must be kept alive, and must outlive `VDom`.
 /// If you need an "owned" version that takes an input string and can be kept around forever,

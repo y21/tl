@@ -1,5 +1,5 @@
+use crate::{HTMLTag, Node, parser::*};
 use crate::{parse, parse_owned};
-use crate::parser::*;
 
 fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
     match actual {
@@ -72,7 +72,9 @@ fn move_owned() {
 
     let guard = unsafe { parse_owned(input) };
 
-    fn move_me<T>(p: T) -> T { p }
+    fn move_me<T>(p: T) -> T {
+        p
+    }
 
     let guard = std::thread::spawn(|| guard).join().unwrap();
     let guard = move_me(guard);
