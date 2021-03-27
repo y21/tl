@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
                 return self.stream.slice_unchecked(start, end);
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
 
         self.stream.slice_unchecked(start, self.stream.idx)
@@ -70,7 +70,7 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
     }
 
@@ -85,7 +85,7 @@ impl<'a> Parser<'a> {
                 return Some(self.stream.slice_unchecked(start, idx));
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
 
         None
@@ -98,7 +98,7 @@ impl<'a> Parser<'a> {
             let idx = self.stream.idx;
 
             if self.stream.slice_len(idx, constants::COMMENT.len()).eq(constants::COMMENT) {
-                self.stream.idx += constants::COMMENT.len();
+                self.stream.advance_by(constants::COMMENT.len());
 
                 let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
 
@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
 
         None
@@ -157,7 +157,7 @@ impl<'a> Parser<'a> {
                 attributes.raw.insert(k.into(), v);
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
 
         attributes
@@ -179,7 +179,7 @@ impl<'a> Parser<'a> {
                 .eq(constants::COMMENT);
 
             if is_comment {
-                self.stream.idx += constants::COMMENT.len();
+                self.stream.advance_by(constants::COMMENT.len());
                 let comment = self.skip_comment()?;
 
                 // Comments are ignored, so we return no element
@@ -259,7 +259,7 @@ impl<'a> Parser<'a> {
 
             let slice = self.stream.slice(idx, idx + constants::END_OF_TAG.len());
             if slice.eq(constants::END_OF_TAG) {
-                self.stream.idx += constants::END_OF_TAG.len();
+                self.stream.advance_by(constants::END_OF_TAG.len());
                 let ident = self.read_ident()?;
 
                 if !ident.eq(name) {
@@ -347,7 +347,7 @@ impl<'a> Parser<'a> {
                 last = idx + 1;
             }
 
-            stream.idx += 1;
+            stream.advance();
         }
     }
 

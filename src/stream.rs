@@ -18,7 +18,7 @@ impl<'a, T: Copy> Stream<'a, T> {
     }
     /// Returns a copy of the next element
     pub fn next_cpy(&mut self) -> Option<T> {
-        self.idx += 1;
+        self.advance();
         self.data.get(self.idx).copied()
     }
 }
@@ -34,7 +34,7 @@ impl<'a, T: Eq + Copy> Stream<'a, T> {
         let c = self.current_cpy()?;
 
         if expect.contains(&c) {
-            self.idx += 1;
+            self.advance();
             return Some(c);
         }
 
@@ -67,13 +67,21 @@ impl<'a, T> Stream<'a, T> {
     /// Returns the next element
     pub fn next(&mut self) -> Option<&T> {
         self.data.get(self.idx + 1).map(|c| {
-            self.idx += 1;
+            self.advance();
             c
         })
     }
 
     pub fn peek(&self) -> Option<&T> {
         self.data.get(self.idx + 1)
+    }
+
+    pub fn advance(&mut self) {
+        self.idx += 1;
+    }
+
+    pub fn advance_by(&mut self, step: usize) {
+        self.idx += step;
     }
 
     /// Returns the current element, but panicks if out of bounds
