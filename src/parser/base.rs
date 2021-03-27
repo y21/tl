@@ -1,131 +1,8 @@
 use crate::bytes::Bytes;
 use crate::stream::Stream;
 use crate::util;
-use std::{borrow::Cow, collections::HashMap, rc::Rc};
-
-const OPENING_TAG: u8 = b'<';
-const END_OF_TAG: &[u8] = b"</";
-const SELF_CLOSING: &[u8] = b"/>";
-const COMMENT: &[u8] = b"--";
-const ID_ATTR: &[u8] = b"id";
-const CLASS_ATTR: &[u8] = b"class";
-const VOID_TAGS: &[&[u8]] = &[
-    b"area", b"base", b"br", b"col", b"embed", b"hr", b"img", b"input", b"keygen", b"link",
-    b"meta", b"param", b"source", b"track", b"wbr",
-];
-
-/// Stores all attributes of an HTML tag, as well as additional metadata such as `id` and `class`
-#[derive(Debug, Clone)]
-pub struct Attributes<'a> {
-    /// Raw attributes (maps attribute key to attribute value)
-    pub raw: HashMap<Bytes<'a>, Option<Bytes<'a>>>,
-    /// The ID of this HTML element, if present
-    pub id: Option<Bytes<'a>>,
-    /// A list of class names of this HTML element, if present
-    pub class: Option<Bytes<'a>>,
-}
-
-impl<'a> Attributes<'a> {
-    /// Creates a new `Attributes
-    pub(crate) fn new() -> Self {
-        Self {
-            raw: HashMap::new(),
-            id: None,
-            class: None,
-        }
-    }
-}
-
-/// Represents a single HTML element
-#[derive(Debug, Clone)]
-pub struct HTMLTag<'a> {
-    _name: Option<Bytes<'a>>,
-    _attributes: Attributes<'a>,
-    _children: Vec<Rc<Node<'a>>>,
-    _raw: Bytes<'a>,
-}
-
-impl<'a> HTMLTag<'a> {
-    /// Creates a new HTMLTag
-    pub(crate) fn new(
-        name: Option<Bytes<'a>>,
-        attr: Attributes<'a>,
-        children: Vec<Rc<Node<'a>>>,
-        raw: Bytes<'a>,
-    ) -> Self {
-        Self {
-            _name: name,
-            _attributes: attr,
-            _children: children,
-            _raw: raw,
-        }
-    }
-
-    /// Returns the contained markup
-    /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
-    pub fn inner_html(&self) -> &Bytes<'a> {
-        &self._raw
-    }
-
-    /// Returns the contained text of this element, excluding any markup
-    /// Equivalent to [Element#innerText](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerText) in browsers)
-    /// This function may not allocate memory for a new string as it can just return the part of the tag that doesn't have markup
-    /// For tags that *do* have more than one subnode, this will allocate memory
-    pub fn inner_text(&self) -> Cow<'a, str> {
-        let len = self._children.len();
-
-        if len == 0 {
-            // If there are no subnodes, we can just return a static, empty, string slice
-            return Cow::Borrowed("");
-        }
-
-        let first = &self._children[0];
-
-        if len == 1 {
-            match &**first {
-                Node::Tag(t) => return t.inner_text(),
-                Node::Raw(e) => return e.as_utf8_str(),
-                Node::Comment(_) => return Cow::Borrowed(""),
-            }
-        }
-
-        // If there are >1 nodes, we need to allocate a new string and push each inner_text in it
-        // TODO: check if String::with_capacity() is worth it
-        let mut s = String::from(first.inner_text());
-
-        for node in self._children.iter().skip(1) {
-            match &**node {
-                Node::Tag(t) => s.push_str(&t.inner_text()),
-                Node::Raw(e) => s.push_str(&e.as_utf8_str()),
-                Node::Comment(_) => { /* no op */ }
-            }
-        }
-
-        Cow::Owned(s)
-    }
-}
-
-/// An HTML Node
-#[derive(Debug, Clone)]
-pub enum Node<'a> {
-    /// A regular HTML element/tag
-    Tag(HTMLTag<'a>),
-    /// Raw text (no particular HTML element)
-    Raw(Bytes<'a>),
-    /// Comment (<!-- -->)
-    Comment(Bytes<'a>),
-}
-
-impl<'a> Node<'a> {
-    /// Returns the inner text of this node
-    pub fn inner_text(&self) -> Cow<'a, str> {
-        match self {
-            Node::Comment(_) => Cow::Borrowed(""),
-            Node::Raw(r) => r.as_utf8_str(),
-            Node::Tag(t) => t.inner_text(),
-        }
-    }
-}
+use std::{collections::HashMap, rc::Rc};
+use super::{constants, tag::{Attributes, HTMLTag, Node}};
 
 /// A list of shared HTML nodes
 pub type Tree<'a> = Vec<Rc<Node<'a>>>;
@@ -179,7 +56,7 @@ impl<'a> Parser<'a> {
                 return self.stream.slice_unchecked(start, end);
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
 
         self.stream.slice_unchecked(start, self.stream.idx)
@@ -193,7 +70,7 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
     }
 
@@ -208,7 +85,7 @@ impl<'a> Parser<'a> {
                 return Some(self.stream.slice_unchecked(start, idx));
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
 
         None
@@ -220,8 +97,8 @@ impl<'a> Parser<'a> {
         while !self.stream.is_eof() {
             let idx = self.stream.idx;
 
-            if self.stream.slice_len(idx, COMMENT.len()).eq(COMMENT) {
-                self.stream.idx += COMMENT.len();
+            if self.stream.slice_len(idx, constants::COMMENT.len()).eq(constants::COMMENT) {
+                self.stream.advance_by(constants::COMMENT.len());
 
                 let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
 
@@ -230,7 +107,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
 
         None
@@ -261,7 +138,7 @@ impl<'a> Parser<'a> {
 
             let cur = self.stream.current_unchecked();
 
-            if SELF_CLOSING.contains(cur) {
+            if constants::SELF_CLOSING.contains(cur) {
                 break;
             }
 
@@ -271,16 +148,16 @@ impl<'a> Parser<'a> {
 
                 let v: Option<Bytes<'a>> = v.map(Into::into);
 
-                if k.eq(ID_ATTR) {
+                if k.eq(constants::ID_ATTR) {
                     attributes.id = v.clone();
-                } else if k.eq(CLASS_ATTR) {
+                } else if k.eq(constants::CLASS_ATTR) {
                     attributes.class = v.clone();
                 }
 
                 attributes.raw.insert(k.into(), v);
             }
 
-            self.stream.idx += 1;
+            self.stream.advance();
         }
 
         attributes
@@ -298,11 +175,11 @@ impl<'a> Parser<'a> {
         if markup_declaration {
             let is_comment = self
                 .stream
-                .slice(self.stream.idx, self.stream.idx + COMMENT.len())
-                .eq(COMMENT);
+                .slice(self.stream.idx, self.stream.idx + constants::COMMENT.len())
+                .eq(constants::COMMENT);
 
             if is_comment {
-                self.stream.idx += COMMENT.len();
+                self.stream.advance_by(constants::COMMENT.len());
                 let comment = self.skip_comment()?;
 
                 // Comments are ignored, so we return no element
@@ -361,7 +238,7 @@ impl<'a> Parser<'a> {
 
         self.stream.expect_and_skip(b'>')?;
 
-        if VOID_TAGS.contains(&name) {
+        if constants::VOID_TAGS.contains(&name) {
             let raw = self.stream.slice_from(start);
 
             // Some HTML tags don't have contents (e.g. <br>),
@@ -380,9 +257,9 @@ impl<'a> Parser<'a> {
 
             let idx = self.stream.idx;
 
-            let slice = self.stream.slice(idx, idx + END_OF_TAG.len());
-            if slice.eq(END_OF_TAG) {
-                self.stream.idx += END_OF_TAG.len();
+            let slice = self.stream.slice(idx, idx + constants::END_OF_TAG.len());
+            if slice.eq(constants::END_OF_TAG) {
+                self.stream.advance_by(constants::END_OF_TAG.len());
                 let ident = self.read_ident()?;
 
                 if !ident.eq(name) {
@@ -415,7 +292,7 @@ impl<'a> Parser<'a> {
 
         let ch = self.stream.current_cpy()?;
 
-        if ch == OPENING_TAG {
+        if ch == constants::OPENING_TAG {
             if let Some(tag) = self.parse_tag(true) {
                 let tag_rc = Rc::new(tag);
 
@@ -470,7 +347,7 @@ impl<'a> Parser<'a> {
                 last = idx + 1;
             }
 
-            stream.idx += 1;
+            stream.advance();
         }
     }
 

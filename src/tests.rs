@@ -1,5 +1,5 @@
-use crate::parse;
-use crate::parser::*;
+use crate::{HTMLTag, Node, parser::*};
+use crate::{parse, parse_owned};
 
 fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
     match actual {
@@ -49,4 +49,39 @@ fn nested_inner_text() {
     let el = force_as_tag(&dom.children()[0]);
 
     assert_eq!(el.inner_text(), "hello nested element");
+}
+
+#[test]
+fn owned_dom() {
+    let owned_dom = {
+        let input = String::from("<p id=\"test\">hello</p>");
+        let dom = unsafe { parse_owned(input) };
+        dom
+    };
+
+    let dom = owned_dom.get_ref();
+
+    let el = force_as_tag(&dom.children()[0]);
+
+    assert_eq!(el.inner_text(), "hello");
+}
+
+#[test]
+fn move_owned() {
+    let input = String::from("<p id=\"test\">hello</p>");
+
+    let guard = unsafe { parse_owned(input) };
+
+    fn move_me<T>(p: T) -> T {
+        p
+    }
+
+    let guard = std::thread::spawn(|| guard).join().unwrap();
+    let guard = move_me(guard);
+
+    let dom = guard.get_ref();
+
+    let el = force_as_tag(&dom.children()[0]);
+
+    assert_eq!(el.inner_text(), "hello");
 }
