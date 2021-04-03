@@ -267,11 +267,7 @@ impl<'a> Parser<'a> {
             let slice = self.stream.slice(idx, idx + constants::END_OF_TAG.len());
             if slice.eq(constants::END_OF_TAG) {
                 self.stream.advance_by(constants::END_OF_TAG.len());
-                let ident = self.read_ident()?;
-
-                if !ident.eq(name) {
-                    return None;
-                }
+                self.read_ident()?;
 
                 // TODO: do we want to accept the tag if it has no closing tag?
                 self.stream.expect_and_skip(b'>');
