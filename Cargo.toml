@@ -11,5 +11,8 @@ readme = "README.md"
 documentation = "https://docs.rs/tl"
 keywords = ["html", "parser"]
 categories = ["parser-implementations", "parsing"]
+exclude = [
+    ".github/*"
+]
 
 [dependencies]
