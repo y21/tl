@@ -1,5 +1,5 @@
-use crate::{Node, Parser, Tree};
 use crate::{bytes::AsBytes, parser::HTMLVersion};
+use crate::{Node, Parser, Tree};
 use std::{marker::PhantomData, rc::Rc};
 
 /// VDom represents a [Document Object Model](https://developer.mozilla.org/en/docs/Web/API/Document_Object_Model)
@@ -44,6 +44,23 @@ impl<'a> VDom<'a> {
     /// This is determined by the `<!DOCTYPE>` tag
     pub fn version(&self) -> Option<HTMLVersion> {
         self.parser.version
+    }
+
+    /// Calls the given closure with each tag as parameter
+    ///
+    /// The closure must return a boolean, indicating whether it should stop iterating
+    /// Returning `true` will break the loop
+    pub fn find_node<F>(&self, mut f: F) -> Option<&Rc<Node<'a>>>
+    where
+        F: FnMut(&Rc<Node<'a>>) -> bool,
+    {
+        for node in self.children() {
+            if let Some(node) = node.find_node(&mut f) {
+                return Some(node);
+            }
+        }
+
+        None
     }
 }
 

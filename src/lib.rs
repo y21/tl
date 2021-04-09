@@ -49,7 +49,7 @@ mod vdom;
 
 pub use bytes::{AsBytes, Bytes};
 use parser::Parser;
-pub use parser::{tag::Attributes, tag::HTMLTag, HTMLVersion, tag::Node, Tree};
+pub use parser::{tag::Attributes, tag::HTMLTag, tag::Node, HTMLVersion, Tree};
 pub use vdom::{VDom, VDomGuard};
 
 /// Parses the given input string

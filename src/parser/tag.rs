@@ -1,5 +1,5 @@
-use std::{borrow::Cow, collections::HashMap, rc::Rc};
 use crate::Bytes;
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
 /// Stores all attributes of an HTML tag, as well as additional metadata such as `id` and `class`
 #[derive(Debug, Clone)]
@@ -46,6 +46,11 @@ impl<'a> HTMLTag<'a> {
             _children: children,
             _raw: raw,
         }
+    }
+
+    /// Returns a vector of subnodes ("children") of this HTML tag
+    pub fn children(&self) -> &Vec<Rc<Node<'a>>> {
+        &self._children
     }
 
     /// Returns the name of this HTML tag
@@ -100,6 +105,23 @@ impl<'a> HTMLTag<'a> {
 
         Cow::Owned(s)
     }
+
+    /// Calls the given closure with each tag as parameter
+    ///
+    /// The closure must return a boolean, indicating whether it should stop iterating
+    /// Returning `true` will break the loop
+    pub fn find_node<'b, F>(&'b self, f: &mut F) -> Option<&'b Rc<Node<'a>>>
+    where
+        F: FnMut(&Rc<Node<'a>>) -> bool,
+    {
+        for node in self.children() {
+            if let Some(tag) = node.find_node(f) {
+                return Some(tag);
+            }
+        }
+
+        None
+    }
 }
 
 /// An HTML Node
@@ -120,6 +142,53 @@ impl<'a> Node<'a> {
             Node::Comment(_) => Cow::Borrowed(""),
             Node::Raw(r) => r.as_utf8_str(),
             Node::Tag(t) => t.inner_text(),
+        }
+    }
+
+    /// Calls the given closure with each tag as parameter
+    ///
+    /// The closure must return a boolean, indicating whether it should stop iterating
+    /// Returning `true` will break the loop
+    pub fn find_node<'b, F>(self: &'b Rc<Node<'a>>, f: &mut F) -> Option<&'b Rc<Node<'a>>>
+    where
+        F: FnMut(&Rc<Node<'a>>) -> bool,
+    {
+        if f(self) {
+            return Some(self);
+        }
+
+        if let Self::Tag(tag) = &**self {
+            if let Some(tag) = tag.find_node(f) {
+                return Some(tag);
+            }
+        }
+
+        None
+    }
+
+    /// Tries to coerce this node into a `HTMLTag` variant
+    pub fn as_tag(&self) -> Option<&HTMLTag<'a>> {
+        match self {
+            Self::Tag(tag) => Some(tag),
+            _ => None,
+        }
+    }
+
+    /// Tries to coerce this node into a comment, returning the text
+    pub fn as_comment(&self) -> Option<&Bytes<'a>> {
+        match self {
+            Self::Comment(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// Tries to coerce this node into a raw text node, returning the text
+    ///
+    /// "Raw text nodes" are nodes that are not HTML tags, but just text
+    pub fn as_raw(&self) -> Option<&Bytes<'a>> {
+        match self {
+            Self::Raw(r) => Some(r),
+            _ => None,
         }
     }
 }

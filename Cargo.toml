@@ -1,6 +1,6 @@
 [package]
 name = "tl"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["y21"]
 edition = "2018"
 license = "MIT"
@@ -11,5 +11,8 @@ readme = "README.md"
 documentation = "https://docs.rs/tl"
 keywords = ["html", "parser"]
 categories = ["parser-implementations", "parsing"]
+exclude = [
+    ".github/*"
+]
 
 [dependencies]

@@ -1,5 +1,5 @@
-use crate::{HTMLTag, Node, parser::*};
 use crate::{parse, parse_owned};
+use crate::{parser::*, HTMLTag, Node};
 
 fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
     match actual {
@@ -84,4 +84,19 @@ fn move_owned() {
     let el = force_as_tag(&dom.children()[0]);
 
     assert_eq!(el.inner_text(), "hello");
+}
+
+#[test]
+fn with() {
+    let input = r#"<p>hello <span>whats up</span></p>"#;
+
+    let dom = parse(input);
+
+    let tag = dom.find_node(|node| {
+        node.as_tag()
+            .map(|tag| tag.name() == &Some("span".into()))
+            .unwrap_or(false)
+    });
+
+    assert_eq!(tag.map(|tag| tag.inner_text()), Some("whats up".into()))
 }

@@ -1,8 +1,11 @@
+use super::{
+    constants,
+    tag::{Attributes, HTMLTag, Node},
+};
 use crate::bytes::Bytes;
 use crate::stream::Stream;
 use crate::util;
 use std::{collections::HashMap, rc::Rc};
-use super::{constants, tag::{Attributes, HTMLTag, Node}};
 
 /// A list of shared HTML nodes
 pub type Tree<'a> = Vec<Rc<Node<'a>>>;
@@ -97,7 +100,11 @@ impl<'a> Parser<'a> {
         while !self.stream.is_eof() {
             let idx = self.stream.idx;
 
-            if self.stream.slice_len(idx, constants::COMMENT.len()).eq(constants::COMMENT) {
+            if self
+                .stream
+                .slice_len(idx, constants::COMMENT.len())
+                .eq(constants::COMMENT)
+            {
                 self.stream.advance_by(constants::COMMENT.len());
 
                 let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
@@ -260,11 +267,7 @@ impl<'a> Parser<'a> {
             let slice = self.stream.slice(idx, idx + constants::END_OF_TAG.len());
             if slice.eq(constants::END_OF_TAG) {
                 self.stream.advance_by(constants::END_OF_TAG.len());
-                let ident = self.read_ident()?;
-
-                if !ident.eq(name) {
-                    return None;
-                }
+                self.read_ident()?;
 
                 // TODO: do we want to accept the tag if it has no closing tag?
                 self.stream.expect_and_skip(b'>');
