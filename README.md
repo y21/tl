@@ -17,7 +17,7 @@ fn main() {
 Using `VDom::find_node()` to dynamically find a subnode.
 > Note: If the HTML tag has an `id` attribute that you can use,
 > you probably want to use `get_element_by_id` instead, as it does not iterate over the tree to find the element.
-```rs
+```rust
 fn main() {
     let input = r#"<div><img src="cool-image.png" /></div>"#;
     let dom = tl::parse(input);
