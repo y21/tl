@@ -160,15 +160,11 @@ impl<'a> Parser<'a> {
                 } else if k.eq(constants::CLASS_ATTR) {
                     attributes.class = v.clone();
                 }
-                
-                if v.is_some() {
-                    self.stream.advance();
-                }
 
                 attributes.raw.insert(k.into(), v);
-
             }
 
+            self.stream.advance();
         }
 
         attributes
