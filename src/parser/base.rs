@@ -1,14 +1,17 @@
 use super::{
     constants,
+    handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
-use crate::bytes::Bytes;
 use crate::stream::Stream;
 use crate::util;
-use std::{collections::HashMap, rc::Rc};
+use crate::{bytes::Bytes, inline::vec::InlineVec};
+use std::collections::HashMap;
 
-/// A list of shared HTML nodes
-pub type Tree<'a> = Vec<Rc<Node<'a>>>;
+/// A list of HTML nodes
+pub type Tree<'a> = Vec<Node<'a>>;
+
+pub type ClassVec = InlineVec<NodeHandle, 2>;
 
 /// HTML Version (<!DOCTYPE>)
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -23,24 +26,43 @@ pub enum HTMLVersion {
     FramesetHTML401,
 }
 
+/// The main HTML parser
+///
+/// Users of this library are not supposed to directly construct this struct.
+/// Instead, users must call `tl::parse()` and use the returned `VDom`.
 #[derive(Debug)]
 pub struct Parser<'a> {
-    pub stream: Stream<'a, u8>,
-    pub ast: Tree<'a>,
-    pub ids: HashMap<Bytes<'a>, Rc<Node<'a>>>,
-    pub classes: HashMap<Bytes<'a>, Vec<Rc<Node<'a>>>>,
-    pub version: Option<HTMLVersion>,
+    /// A global collection of all HTML tags that appear in the source code
+    ///
+    /// HTML Nodes contain indicies into this vector
+    pub(crate) tags: Tree<'a>,
+    /// The inner stream that is used to iterate through the HTML source
+    pub(crate) stream: Stream<'a, u8>,
+    /// The topmost HTML nodes
+    pub(crate) ast: Vec<NodeHandle>,
+    /// A HashMap that maps Tag ID to a Node ID
+    pub(crate) ids: HashMap<Bytes<'a>, NodeHandle>,
+    /// A HashMap that maps Tag Class to a Node ID
+    pub(crate) classes: HashMap<Bytes<'a>, ClassVec>,
+    /// The current HTML version, if set
+    pub(crate) version: Option<HTMLVersion>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: &str) -> Parser {
+    pub(crate) fn new(input: &str) -> Parser {
         Parser {
+            tags: Vec::new(),
             stream: Stream::new(input.as_bytes()),
             ast: Vec::new(),
             ids: HashMap::new(),
             classes: HashMap::new(),
             version: None,
         }
+    }
+
+    fn register_tag(&mut self, node: Node<'a>) -> NodeHandle {
+        self.tags.push(node);
+        NodeHandle::new(self.tags.len() - 1)
     }
 
     fn skip_whitespaces(&mut self) {
@@ -222,7 +244,7 @@ impl<'a> Parser<'a> {
 
         let attributes = self.parse_attributes();
 
-        let mut children = Vec::new();
+        let mut children = InlineVec::new();
 
         let is_self_closing = self.stream.expect_and_skip_cond(b'/');
 
@@ -275,9 +297,9 @@ impl<'a> Parser<'a> {
             }
 
             // TODO: "partial" JS parser is needed to deal with script tags
-            let node = self.parse_single()?;
+            let node_id = self.parse_single()?;
 
-            children.push(node);
+            children.push(node_id);
         }
 
         let raw = self.stream.slice_from(start);
@@ -290,37 +312,42 @@ impl<'a> Parser<'a> {
         )))
     }
 
-    fn parse_single(&mut self) -> Option<Rc<Node<'a>>> {
+    fn parse_single(&mut self) -> Option<NodeHandle> {
         self.skip_whitespaces();
 
         let ch = self.stream.current_cpy()?;
 
         if ch == constants::OPENING_TAG {
             if let Some(tag) = self.parse_tag(true) {
-                let tag_rc = Rc::new(tag);
+                let handle = self.register_tag(tag);
+                let tag_id = handle.get_inner();
 
-                if let Node::Tag(tag) = &*tag_rc {
-                    let (id, class) = (&tag._attributes.id, &tag._attributes.class);
+                let (id, class) = if let Some(Node::Tag(tag)) = self.tags.get(tag_id) {
+                    (tag._attributes.id.clone(), tag._attributes.class.clone())
+                } else {
+                    (None, None)
+                };
 
-                    if let Some(id) = id {
-                        self.ids.insert(id.clone(), tag_rc.clone());
-                    }
-
-                    if let Some(class) = class {
-                        self.process_class(class, tag_rc.clone());
-                    }
+                if let Some(id) = id {
+                    self.ids.insert(id.clone(), handle);
                 }
 
-                Some(tag_rc)
+                if let Some(class) = class {
+                    self.process_class(&class, handle);
+                }
+
+                Some(handle)
             } else {
                 None
             }
         } else {
-            Some(Rc::new(Node::Raw(self.read_to(&[b'<']).into())))
+            let node = Node::Raw(self.read_to(&[b'<']).into());
+            let tag_id = self.register_tag(node);
+            Some(tag_id)
         }
     }
 
-    fn process_class(&mut self, class: &Bytes<'a>, element: Rc<Node<'a>>) {
+    fn process_class(&mut self, class: &Bytes<'a>, element: NodeHandle) {
         let raw = class.raw();
 
         let mut stream = Stream::new(raw);
@@ -343,8 +370,8 @@ impl<'a> Parser<'a> {
                 if !slice.is_empty() {
                     self.classes
                         .entry(slice.into())
-                        .or_insert_with(Vec::new)
-                        .push(element.clone());
+                        .or_insert_with(InlineVec::new)
+                        .push(element);
                 }
 
                 last = idx + 1;
@@ -352,6 +379,12 @@ impl<'a> Parser<'a> {
 
             stream.advance();
         }
+    }
+
+    /// Resolves an internal Node ID obtained from a NodeHandle to a Node
+    #[inline]
+    pub fn resolve_node_id(&self, id: usize) -> Option<&Node<'a>> {
+        self.tags.get(id)
     }
 
     pub(crate) fn parse(mut self) -> Parser<'a> {

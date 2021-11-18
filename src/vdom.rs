@@ -1,8 +1,14 @@
+use crate::parser::handle::NodeHandle;
+use crate::parser::ClassVec;
 use crate::{bytes::AsBytes, parser::HTMLVersion};
-use crate::{Node, Parser, Tree};
-use std::{marker::PhantomData, rc::Rc};
+use crate::{Node, Parser};
+use std::marker::PhantomData;
 
 /// VDom represents a [Document Object Model](https://developer.mozilla.org/en/docs/Web/API/Document_Object_Model)
+///
+/// It is the result of parsing an HTML document.
+/// Internally it is only a wrapper around the [`Parser`] struct, but you do not need to know much about the [`Parser`] struct except for that all of the HTML tags are stored in here.
+/// Many functions of the public API take a reference to a [`Parser`] as a parameter to resolve [`NodeHandle`]s to [`Node`]s.
 #[derive(Debug)]
 pub struct VDom<'a> {
     /// Internal parser
@@ -16,19 +22,22 @@ impl<'a> From<Parser<'a>> for VDom<'a> {
 }
 
 impl<'a> VDom<'a> {
-    /// Finds an element by its `id` attribute. This operation is O(1), as it's only a HashMap lookup
-    pub fn get_element_by_id<'b, S: ?Sized>(&'b self, id: &'b S) -> Option<&'b Rc<Node<'a>>>
+    /// Returns a reference to the underlying parser
+    #[inline]
+    pub fn parser(&self) -> &Parser<'a> {
+        &self.parser
+    }
+
+    /// Finds an element by its `id` attribute.
+    pub fn get_element_by_id<'b, S: ?Sized>(&'b self, id: &'b S) -> Option<NodeHandle>
     where
         S: AsBytes,
     {
-        self.parser.ids.get(&id.as_bytes())
+        self.parser.ids.get(&id.as_bytes()).copied()
     }
 
-    /// Returns a list of elements that match a given class name. This operation is O(1), as it's only a HashMap lookup
-    pub fn get_elements_by_class_name<'b, S: ?Sized>(
-        &'b self,
-        id: &'b S,
-    ) -> Option<&'b Vec<Rc<Node<'a>>>>
+    /// Returns a list of elements that match a given class name.
+    pub fn get_elements_by_class_name<'b, S: ?Sized>(&'b self, id: &'b S) -> Option<&'b ClassVec>
     where
         S: AsBytes,
     {
@@ -36,7 +45,7 @@ impl<'a> VDom<'a> {
     }
 
     /// Returns all subnodes ("children") of this DOM
-    pub fn children(&self) -> &Tree<'a> {
+    pub fn children(&self) -> &[NodeHandle] {
         &self.parser.ast
     }
 
@@ -50,13 +59,17 @@ impl<'a> VDom<'a> {
     ///
     /// The closure must return a boolean, indicating whether it should stop iterating
     /// Returning `true` will break the loop
-    pub fn find_node<F>(&self, mut f: F) -> Option<&Rc<Node<'a>>>
+    pub fn find_node<F>(&self, mut f: F) -> Option<NodeHandle>
     where
-        F: FnMut(&Rc<Node<'a>>) -> bool,
+        F: FnMut(&Node<'a>) -> bool,
     {
+        let parser = self.parser();
+
         for node in self.children() {
-            if let Some(node) = node.find_node(&mut f) {
-                return Some(node);
+            let node = node.get(parser).and_then(|x| x.find_node(parser, &mut f));
+
+            if node.is_some() {
+                return node;
             }
         }
 

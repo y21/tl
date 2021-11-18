@@ -11,8 +11,9 @@ fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
 #[test]
 fn inner_html() {
     let dom = parse("abc <p>test</p> def");
+    let parser = dom.parser();
 
-    let tag = force_as_tag(&dom.children()[1]);
+    let tag = force_as_tag(dom.children()[1].get(parser).unwrap());
 
     assert_eq!(tag.inner_html().as_utf8_str(), "<p>test</p>");
 }
@@ -29,7 +30,7 @@ fn get_element_by_id() {
 
     let tag = dom.get_element_by_id("test").expect("Element not present");
 
-    let el = force_as_tag(&tag);
+    let el = force_as_tag(tag.get(dom.parser()).unwrap());
 
     assert_eq!(el.inner_html().as_utf8_str(), "<p id=\"test\"></p>")
 }
@@ -45,10 +46,11 @@ fn html5() {
 #[test]
 fn nested_inner_text() {
     let dom = parse("<p>hello <p>nested element</p></p>");
+    let parser = dom.parser();
 
-    let el = force_as_tag(&dom.children()[0]);
+    let el = force_as_tag(dom.children()[0].get(parser).unwrap());
 
-    assert_eq!(el.inner_text(), "hello nested element");
+    assert_eq!(el.inner_text(parser), "hello nested element");
 }
 
 #[test]
@@ -60,10 +62,11 @@ fn owned_dom() {
     };
 
     let dom = owned_dom.get_ref();
+    let parser = dom.parser();
 
-    let el = force_as_tag(&dom.children()[0]);
+    let el = force_as_tag(dom.children()[0].get(parser).unwrap());
 
-    assert_eq!(el.inner_text(), "hello");
+    assert_eq!(el.inner_text(parser), "hello");
 }
 
 #[test]
@@ -80,10 +83,11 @@ fn move_owned() {
     let guard = move_me(guard);
 
     let dom = guard.get_ref();
+    let parser = dom.parser();
 
-    let el = force_as_tag(&dom.children()[0]);
+    let el = force_as_tag(dom.children()[0].get(parser).unwrap());
 
-    assert_eq!(el.inner_text(), "hello");
+    assert_eq!(el.inner_text(parser), "hello");
 }
 
 #[test]
@@ -91,6 +95,7 @@ fn with() {
     let input = r#"<p>hello <span>whats up</span></p>"#;
 
     let dom = parse(input);
+    let parser = dom.parser();
 
     let tag = dom.find_node(|node| {
         node.as_tag()
@@ -98,5 +103,8 @@ fn with() {
             .unwrap_or(false)
     });
 
-    assert_eq!(tag.map(|tag| tag.inner_text()), Some("whats up".into()))
+    assert_eq!(
+        tag.map(|tag| tag.get(parser).unwrap().inner_text(parser)),
+        Some("whats up".into())
+    )
 }
