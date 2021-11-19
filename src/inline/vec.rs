@@ -269,4 +269,16 @@ mod tests {
 
         assert_eq!(x.get(1337), None);
     }
+
+    #[test]
+    fn inlinevec_as_slice() {
+        let mut x = InlineVecInner::<usize, 4>::new();
+        x.push(1337);
+        x.push(42);
+        x.push(17);
+        assert_eq!(x.as_slice(), &[1337, 42, 17]);
+        x.push(19);
+        x.push(34);
+        assert_eq!(x.as_slice(), &[1337, 42, 17, 19, 34]);
+    }
 }
