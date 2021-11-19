@@ -6,12 +6,14 @@ use std::borrow::Cow;
 pub struct Bytes<'a>(&'a [u8]);
 
 impl<'a> From<&'a str> for Bytes<'a> {
+    #[inline]
     fn from(s: &'a str) -> Self {
         Self(s.as_bytes())
     }
 }
 
 impl<'a> From<&'a [u8]> for Bytes<'a> {
+    #[inline]
     fn from(s: &'a [u8]) -> Self {
         Self(s)
     }

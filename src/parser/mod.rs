@@ -1,6 +1,8 @@
-pub mod base;
-pub mod constants;
-pub mod handle;
-pub mod tag;
+mod base;
+mod constants;
+mod handle;
+mod tag;
 
 pub use base::*;
+pub use handle::*;
+pub use tag::*;

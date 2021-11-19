@@ -1,6 +1,5 @@
 # tl
 tl is a very fast, zero-copy HTML parser written in pure Rust. <br />
-It does minimal to no copying during parsing by borrowing parts of the input string.
 
 ## Design
 Due to the zero-copy nature of parsers, the string must be kept alive for the entire lifetime of the parser/dom.
@@ -34,21 +33,19 @@ fn main() {
     println!("Inner text: {}", element.inner_text(parser));
 }
 ```
-Using `VDom::find_node()` to dynamically find a subnode.
-> Note: If the HTML tag has an id attribute that you can use,
-> use `VDom::get_element_by_id` instead, as it does not iterate over the tree to find the element.
+
+Iterating over the subnodes of an HTML document:
 ```rust
 fn main() {
     let input = r#"<div><img src="cool-image.png" /></div>"#;
     let dom = tl::parse(input);
-    let element = dom.find_node(|node| {
-        node.as_tag()
-            .unwrap()
-            .attributes()
-            .raw
-            .contains_key(&"src".into())
-    });
-    println!("{:?}", element);
+    let img = dom.nodes()
+        .iter()
+        .find(|node| {
+            node.as_tag().map_or(false, |tag| tag.name() == &"img".into())
+        });
+    
+    println!("{:?}", img);
 }
 ```
 

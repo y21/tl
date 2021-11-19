@@ -6,6 +6,7 @@ pub fn is_ident(c: u8) -> bool {
         || c == b'_'
 }
 
+#[inline]
 pub fn is_strict_whitespace(c: u8) -> bool {
-    [b' '].contains(&c)
+    c == b' '
 }

@@ -11,6 +11,7 @@ use std::collections::HashMap;
 /// A list of HTML nodes
 pub type Tree<'a> = Vec<Node<'a>>;
 
+/// Inline class vector
 pub type ClassVec = InlineVec<NodeHandle, 2>;
 
 /// HTML Version (<!DOCTYPE>)
@@ -69,27 +70,27 @@ impl<'a> Parser<'a> {
         self.read_while(&[b' ', b'\n']);
     }
 
-    fn read_to(&mut self, terminator: &[u8]) -> &'a [u8] {
+    fn read_to(&mut self, terminator: u8) -> &'a [u8] {
         let start = self.stream.idx;
 
         while !self.stream.is_eof() {
-            let ch = self.stream.current_unchecked();
+            // SAFETY: no bound check necessary because it's checked in the condition
+            let ch = unsafe { self.stream.current_cpy_unchecked() };
 
-            let end = self.stream.idx;
-
-            if terminator.contains(ch) {
-                return self.stream.slice_unchecked(start, end);
+            if terminator == ch {
+                return unsafe { self.stream.slice_unchecked(start, self.stream.idx) };
             }
 
             self.stream.advance();
         }
 
-        self.stream.slice_unchecked(start, self.stream.idx)
+        self.stream.slice(start, self.stream.idx)
     }
 
     fn read_while(&mut self, terminator: &[u8]) {
         while !self.stream.is_eof() {
-            let ch = self.stream.current_unchecked();
+            // SAFETY: no bound check necessary because it's checked in the condition
+            let ch = unsafe { self.stream.current_unchecked() };
 
             if !terminator.contains(ch) {
                 break;
@@ -103,11 +104,11 @@ impl<'a> Parser<'a> {
         let start = self.stream.idx;
 
         while !self.stream.is_eof() {
-            let ch = self.stream.current_cpy()?;
+            // SAFETY: no bound check necessary because it's checked in the condition
+            let ch = unsafe { self.stream.current_cpy_unchecked() };
 
             if !util::is_ident(ch) {
-                let idx = self.stream.idx;
-                return Some(self.stream.slice_unchecked(start, idx));
+                return Some(unsafe { self.stream.slice_unchecked(start, self.stream.idx) });
             }
 
             self.stream.advance();
@@ -132,7 +133,7 @@ impl<'a> Parser<'a> {
                 let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
 
                 if is_end_of_comment {
-                    return Some(self.stream.slice_unchecked(start, self.stream.idx));
+                    return Some(unsafe { self.stream.slice_unchecked(start, self.stream.idx) });
                 }
             }
 
@@ -154,18 +155,18 @@ impl<'a> Parser<'a> {
         self.skip_whitespaces();
         let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\''])?;
 
-        let value = self.read_to(&[quote]);
+        let value = self.read_to(quote);
 
         Some((name, Some(value)))
     }
 
-    fn parse_attributes(&mut self) -> Attributes<'a> {
+    fn parse_attributes(&mut self) -> Option<Attributes<'a>> {
         let mut attributes = Attributes::new();
 
         while !self.stream.is_eof() {
             self.skip_whitespaces();
 
-            let cur = self.stream.current_unchecked();
+            let cur = self.stream.current()?;
 
             if constants::SELF_CLOSING.contains(cur) {
                 break;
@@ -189,7 +190,7 @@ impl<'a> Parser<'a> {
             self.stream.advance();
         }
 
-        attributes
+        Some(attributes)
     }
 
     fn parse_tag(&mut self, skip_current: bool) -> Option<Node<'a>> {
@@ -242,7 +243,7 @@ impl<'a> Parser<'a> {
 
         let name = self.read_ident()?;
 
-        let attributes = self.parse_attributes();
+        let attributes = self.parse_attributes()?;
 
         let mut children = InlineVec::new();
 
@@ -258,7 +259,7 @@ impl<'a> Parser<'a> {
             // If this is a self-closing tag (e.g. <img />), we want to return early instead of
             // reading children as the next nodes don't belong to this tag
             return Some(Node::Tag(HTMLTag::new(
-                Some(name.into()),
+                name.into(),
                 attributes,
                 children,
                 raw.into(),
@@ -274,7 +275,7 @@ impl<'a> Parser<'a> {
             // so we need to return early
             // Without it, any following tags would be sub-nodes
             return Some(Node::Tag(HTMLTag::new(
-                Some(name.into()),
+                name.into(),
                 attributes,
                 children,
                 raw.into(),
@@ -286,7 +287,11 @@ impl<'a> Parser<'a> {
 
             let idx = self.stream.idx;
 
-            let slice = self.stream.slice(idx, idx + constants::END_OF_TAG.len());
+            // TODO: panic
+            let slice = self
+                .stream
+                .slice_checked(idx, idx + constants::END_OF_TAG.len());
+
             if slice.eq(constants::END_OF_TAG) {
                 self.stream.advance_by(constants::END_OF_TAG.len());
                 self.read_ident()?;
@@ -305,7 +310,7 @@ impl<'a> Parser<'a> {
         let raw = self.stream.slice_from(start);
 
         Some(Node::Tag(HTMLTag::new(
-            Some(name.into()),
+            name.into(),
             attributes,
             children,
             raw.into(),
@@ -341,7 +346,7 @@ impl<'a> Parser<'a> {
                 None
             }
         } else {
-            let node = Node::Raw(self.read_to(&[b'<']).into());
+            let node = Node::Raw(self.read_to(b'<').into());
             let tag_id = self.register_tag(node);
             Some(tag_id)
         }
@@ -355,11 +360,12 @@ impl<'a> Parser<'a> {
         let mut last = 0;
 
         while !stream.is_eof() {
-            let cur = stream.current_unchecked();
+            // SAFETY: no bound check necessary because it's checked in the condition
+            let cur = unsafe { stream.current_cpy_unchecked() };
 
             let is_last_char = stream.idx == raw.len() - 1;
 
-            if util::is_strict_whitespace(*cur) || is_last_char {
+            if util::is_strict_whitespace(cur) || is_last_char {
                 let idx = if is_last_char {
                     stream.idx + 1
                 } else {

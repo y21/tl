@@ -97,14 +97,32 @@ fn with() {
     let dom = parse(input);
     let parser = dom.parser();
 
-    let tag = dom.find_node(|node| {
-        node.as_tag()
-            .map(|tag| tag.name() == &Some("span".into()))
-            .unwrap_or(false)
-    });
+    let tag = dom
+        .nodes()
+        .iter()
+        .find(|x| x.as_tag().map_or(false, |x| x.name() == &"span".into()));
 
     assert_eq!(
-        tag.map(|tag| tag.get(parser).unwrap().inner_text(parser)),
+        tag.map(|tag| tag.inner_text(parser)),
         Some("whats up".into())
     )
+}
+
+#[test]
+fn abrupt_attributes_stop() {
+    let input = r#"<p "#;
+    parse(input);
+}
+
+#[test]
+fn dom_nodes() {
+    let input = r#"<p><p><a>nested</a></p></p>"#;
+    let dom = parse(input);
+    let parser = dom.parser();
+    let element = dom
+        .nodes()
+        .iter()
+        .find(|x| x.as_tag().map_or(false, |x| x.name().eq(&"a".into())));
+
+    assert_eq!(element.map(|x| x.inner_text(parser)), Some("nested".into()));
 }

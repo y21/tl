@@ -13,11 +13,18 @@ impl<'a, T: Copy> Stream<'a, T> {
     pub fn current_cpy(&self) -> Option<T> {
         self.data.get(self.idx).copied()
     }
+
+    /// Returns a copy of the current element without doing any boundary checks
+    #[inline]
+    pub unsafe fn current_cpy_unchecked(&self) -> T {
+        *self.data.get_unchecked(self.idx)
+    }
 }
 
 impl<'a, T: Eq + Copy> Stream<'a, T> {
     /// Increases internal index by 1 if the given element matches the current element
     /// If it does match, the expected character is returned
+    #[inline]
     pub fn expect_and_skip(&mut self, expect: T) -> Option<T> {
         self.expect_oneof_and_skip(&[expect])
     }
@@ -43,6 +50,7 @@ impl<'a, T: Eq + Copy> Stream<'a, T> {
 
 impl<'a, T> Stream<'a, T> {
     /// Creates a new stream
+    #[inline]
     pub fn new(data: &'a [T]) -> Stream<T> {
         Self { data, idx: 0 }
     }
@@ -67,8 +75,14 @@ impl<'a, T> Stream<'a, T> {
 
     /// Returns the current element, but panicks if out of bounds
     #[inline]
-    pub fn current_unchecked(&self) -> &T {
-        &self.data[self.idx]
+    pub fn current(&self) -> Option<&T> {
+        self.data.get(self.idx)
+    }
+
+    /// Returns the current element, but panicks if out of bounds
+    #[inline]
+    pub unsafe fn current_unchecked(&self) -> &T {
+        &self.data.get_unchecked(self.idx)
     }
 
     /// Checks whether the stream has reached the end
@@ -79,26 +93,32 @@ impl<'a, T> Stream<'a, T> {
 
     /// Returns a subslice of this stream, and panicks if out of bounds
     #[inline]
-    pub fn slice_unchecked(&self, from: usize, to: usize) -> &'a [T] {
+    pub fn slice(&self, from: usize, to: usize) -> &'a [T] {
         &self.data[from..to]
+    }
+
+    /// Returns a subslice of this stream, and panicks if out of bounds
+    #[inline]
+    pub unsafe fn slice_unchecked(&self, from: usize, to: usize) -> &'a [T] {
+        self.data.get_unchecked(from..to)
     }
 
     /// Returns a subslice of this stream but also checks stream length
     /// to prevent out of bounds panicking
     #[inline]
-    pub fn slice(&self, from: usize, to: usize) -> &'a [T] {
+    pub fn slice_checked(&self, from: usize, to: usize) -> &'a [T] {
         &self.data[from..min(self.data.len(), to)]
     }
 
     /// Same as slice, but the second argument is how many elements to slice
     #[inline]
     pub fn slice_len(&self, from: usize, len: usize) -> &'a [T] {
-        self.slice(from, self.idx + len)
+        self.slice_checked(from, self.idx + len)
     }
 
     /// Same as slice, but uses the current index + 1 as `to`
     #[inline]
     pub fn slice_from(&self, from: usize) -> &'a [T] {
-        self.slice(from, self.idx)
+        self.slice_checked(from, self.idx)
     }
 }

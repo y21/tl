@@ -8,22 +8,60 @@ use std::{collections::HashMap, mem::MaybeUninit};
 ///
 /// Hashing can be slower than just iterating through an array
 /// if the array is small, which is where it makes most sense
-// #[derive(Debug, Clone)]
 ///
 /// To convert to a HashMap, use `HashMap::from()`
-pub enum InlineHashMap<K, V, const N: usize> {
-    /// Inline array
+#[derive(Debug, Clone)]
+pub struct InlineHashMap<K, V, const N: usize>(InlineHashMapInner<K, V, N>);
+
+impl<K, V, const N: usize> InlineHashMap<K, V, N>
+where
+    K: Hash + Eq,
+{
+    /// Creates a new InlineHashMap
+    pub(crate) fn new() -> Self {
+        Self(InlineHashMapInner::new())
+    }
+
+    /// Returns the number of elements in the map
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Checks whether this vector is allocated on the heap
+    #[inline]
+    pub fn is_heap_allocated(&self) -> bool {
+        self.0.is_heap_allocated()
+    }
+
+    /// Inserts a new element into the map
+    #[inline]
+    pub fn insert(&mut self, key: K, value: V) {
+        self.0.insert(key, value)
+    }
+
+    /// Returns a reference to the value corresponding to the key.
+    #[inline]
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.0.get(key)
+    }
+
+    /// Returns a reference to the value corresponding to the key.
+    #[inline]
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.0.contains_key(key)
+    }
+}
+
+enum InlineHashMapInner<K, V, const N: usize> {
     Inline {
-        /// Length of the array
         len: usize,
-        /// Data stored in the array
         data: [MaybeUninit<(K, V)>; N],
     },
-    /// Heap allocated HashMap
     Heap(HashMap<K, V>),
 }
 
-impl<K, V, const N: usize> Debug for InlineHashMap<K, V, N>
+impl<K, V, const N: usize> Debug for InlineHashMapInner<K, V, N>
 where
     K: Debug,
     V: Debug,
@@ -33,7 +71,7 @@ where
     }
 }
 
-impl<K, V, const N: usize> Clone for InlineHashMap<K, V, N>
+impl<K, V, const N: usize> Clone for InlineHashMapInner<K, V, N>
 where
     K: Clone,
     V: Clone,
@@ -66,9 +104,9 @@ where
     K: Eq + Hash,
 {
     fn from(map: InlineHashMap<K, V, N>) -> Self {
-        match map {
-            InlineHashMap::Heap(m) => m,
-            InlineHashMap::Inline { len, data } => {
+        match map.0 {
+            InlineHashMapInner::Heap(m) => m,
+            InlineHashMapInner::Inline { len, data } => {
                 let mut new_data = HashMap::with_capacity(len);
 
                 let iter = data.into_iter().take(len);
@@ -84,17 +122,15 @@ where
     }
 }
 
-impl<K, V, const N: usize> InlineHashMap<K, V, N> {
-    /// Creates a new InlineHashMap
+impl<K, V, const N: usize> InlineHashMapInner<K, V, N> {
     #[inline]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::Inline {
             len: 0,
             data: super::uninit_array(),
         }
     }
 
-    /// Returns the length of this map
     #[inline]
     pub fn len(&self) -> usize {
         match self {
@@ -103,15 +139,13 @@ impl<K, V, const N: usize> InlineHashMap<K, V, N> {
         }
     }
 
-    /// Checks whether this vector is allocated on the heap
     #[inline]
     pub fn is_heap_allocated(&self) -> bool {
         matches!(self, Self::Heap(_))
     }
 }
 
-impl<K: Eq + Hash, V, const N: usize> InlineHashMap<K, V, N> {
-    /// Returns a reference to the value corresponding to the key.
+impl<K: Eq + Hash, V, const N: usize> InlineHashMapInner<K, V, N> {
     pub fn get<'m>(&'m self, k: &K) -> Option<&'m V> {
         match self {
             Self::Inline { data, len } => unsafe {
@@ -123,7 +157,6 @@ impl<K: Eq + Hash, V, const N: usize> InlineHashMap<K, V, N> {
         }
     }
 
-    /// Inserts a key-value pair into the map.
     pub fn insert(&mut self, k: K, v: V) {
         let (array, len) = match self {
             Self::Inline { data, len } => (data, len),
@@ -154,7 +187,6 @@ impl<K: Eq + Hash, V, const N: usize> InlineHashMap<K, V, N> {
         }
     }
 
-    /// Returns true if the map contains a value for the specified key.
     pub fn contains_key(&self, k: &K) -> bool {
         match self {
             Self::Inline { data, len } => unsafe {
@@ -199,7 +231,7 @@ mod tests {
 
     #[test]
     fn inlinehashmap_clone() {
-        let mut x = InlineHashMap::<usize, usize, 4>::new();
+        let mut x = InlineHashMapInner::<usize, usize, 4>::new();
 
         for i in 0..10 {
             x.insert(i, i * 2);
@@ -213,7 +245,7 @@ mod tests {
 
     #[test]
     fn inlinehashmap() {
-        let mut x = InlineHashMap::<&'static str, usize, 4>::new();
+        let mut x = InlineHashMapInner::<&'static str, usize, 4>::new();
         assert_eq!(x.len(), 0);
         assert_eq!(x.get(&"hi"), None);
         assert!(!x.is_heap_allocated());

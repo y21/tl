@@ -2,7 +2,8 @@
 #![deny(missing_docs)]
 
 mod bytes;
-mod inline;
+/// Inline data structures
+pub mod inline;
 mod parser;
 mod stream;
 #[cfg(test)]
@@ -11,12 +12,7 @@ mod util;
 mod vdom;
 
 pub use bytes::{AsBytes, Bytes};
-pub use inline::{
-    hashmap::{InlineHashMap, InlineHashMapIterator},
-    vec::{InlineVec, InlineVecIter},
-};
-pub use parser::Parser;
-pub use parser::{handle::NodeHandle, tag::Attributes, tag::HTMLTag, tag::Node, HTMLVersion, Tree};
+pub use parser::*;
 pub use vdom::{VDom, VDomGuard};
 
 /// Parses the given input string

@@ -12,7 +12,6 @@ const INLINE_LENGTH: usize = 4;
 #[derive(Debug, Clone)]
 pub struct Attributes<'a> {
     /// Raw attributes (maps attribute key to attribute value)
-    // pub raw: HashMap<Bytes<'a>, Option<Bytes<'a>>>,
     pub raw: InlineHashMap<Bytes<'a>, Option<Bytes<'a>>, INLINE_LENGTH>,
     /// The ID of this HTML element, if present
     pub id: Option<Bytes<'a>>,
@@ -34,7 +33,7 @@ impl<'a> Attributes<'a> {
 /// Represents a single HTML element
 #[derive(Debug, Clone)]
 pub struct HTMLTag<'a> {
-    pub(crate) _name: Option<Bytes<'a>>,
+    pub(crate) _name: Bytes<'a>,
     pub(crate) _attributes: Attributes<'a>,
     pub(crate) _children: InlineVec<NodeHandle, INLINE_LENGTH>,
     pub(crate) _raw: Bytes<'a>,
@@ -44,7 +43,7 @@ impl<'a> HTMLTag<'a> {
     /// Creates a new HTMLTag
     #[inline]
     pub(crate) fn new(
-        name: Option<Bytes<'a>>,
+        name: Bytes<'a>,
         attr: Attributes<'a>,
         children: InlineVec<NodeHandle, INLINE_LENGTH>,
         raw: Bytes<'a>,
@@ -63,7 +62,7 @@ impl<'a> HTMLTag<'a> {
     }
 
     /// Returns the name of this HTML tag
-    pub fn name(&self) -> &Option<Bytes<'a>> {
+    pub fn name(&self) -> &Bytes<'a> {
         &self._name
     }
 

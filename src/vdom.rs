@@ -1,5 +1,5 @@
-use crate::parser::handle::NodeHandle;
 use crate::parser::ClassVec;
+use crate::parser::NodeHandle;
 use crate::{bytes::AsBytes, parser::HTMLVersion};
 use crate::{Node, Parser};
 use std::marker::PhantomData;
@@ -44,7 +44,15 @@ impl<'a> VDom<'a> {
         self.parser.classes.get(&id.as_bytes())
     }
 
-    /// Returns all subnodes ("children") of this DOM
+    /// Returns a slice of *all* the elements in the HTML document
+    ///
+    /// The difference between `children()` and `nodes()` is that children only returns the immediate children of the root node,
+    /// while `nodes()` returns all nodes, including nested tags.
+    pub fn nodes(&self) -> &[Node<'a>] {
+        &self.parser.tags
+    }
+
+    /// Returns the topmost subnodes ("children") of this DOM
     pub fn children(&self) -> &[NodeHandle] {
         &self.parser.ast
     }
@@ -59,6 +67,10 @@ impl<'a> VDom<'a> {
     ///
     /// The closure must return a boolean, indicating whether it should stop iterating
     /// Returning `true` will break the loop
+    #[deprecated(
+        since = "0.3.0",
+        note = "please use `nodes().iter().find(...)` instead"
+    )]
     pub fn find_node<F>(&self, mut f: F) -> Option<NodeHandle>
     where
         F: FnMut(&Node<'a>) -> bool,

@@ -6,19 +6,61 @@ use std::ops::Index;
 /// if it is small enough
 ///
 /// To convert to a `Vec<T>` use `Vec::from`
-pub enum InlineVec<T, const N: usize> {
-    /// Inline array
+#[derive(Debug, Clone)]
+pub struct InlineVec<T, const N: usize>(InlineVecInner<T, N>);
+
+impl<T, const N: usize> InlineVec<T, N> {
+    /// Creates a new InlineVec
+    pub(crate) fn new() -> Self {
+        Self(InlineVecInner::new())
+    }
+
+    /// Returns the number of elements in the vector
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Checks whether this vector is allocated on the heap
+    #[inline]
+    pub fn is_heap_allocated(&self) -> bool {
+        self.0.is_heap_allocated()
+    }
+
+    /// Inserts a new element into the vector
+    #[inline]
+    pub fn push(&mut self, value: T) {
+        self.0.push(value)
+    }
+
+    /// Returns a reference to the value at the given index
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<&T> {
+        self.0.get(index)
+    }
+
+    /// Returns an iterator over the elements of this vector
+    #[inline]
+    pub fn iter(&self) -> InlineVecIter<'_, T, N> {
+        self.0.iter()
+    }
+
+    /// Returns a slice to the contents of this vector
+    #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        self.0.as_slice()
+    }
+}
+
+enum InlineVecInner<T, const N: usize> {
     Inline {
-        /// Length of the array
         len: usize,
-        /// Data stored in the array
         data: [MaybeUninit<T>; N],
     },
-    /// Heap allocated Vec
     Heap(Vec<T>),
 }
 
-impl<T, const N: usize> Debug for InlineVec<T, N>
+impl<T, const N: usize> Debug for InlineVecInner<T, N>
 where
     T: Debug,
 {
@@ -27,7 +69,7 @@ where
     }
 }
 
-impl<T, const N: usize> Clone for InlineVec<T, N>
+impl<T, const N: usize> Clone for InlineVecInner<T, N>
 where
     T: Clone,
 {
@@ -55,9 +97,9 @@ where
 
 impl<T, const N: usize> From<InlineVec<T, N>> for Vec<T> {
     fn from(vec: InlineVec<T, N>) -> Self {
-        match vec {
-            InlineVec::Heap(m) => m,
-            InlineVec::Inline { len, data } => {
+        match vec.0 {
+            InlineVecInner::Heap(m) => m,
+            InlineVecInner::Inline { len, data } => {
                 let mut new_data = Vec::with_capacity(len);
 
                 let iter = data.into_iter().take(len);
@@ -72,17 +114,15 @@ impl<T, const N: usize> From<InlineVec<T, N>> for Vec<T> {
     }
 }
 
-impl<T, const N: usize> InlineVec<T, N> {
-    /// Creates a new InlineVec
+impl<T, const N: usize> InlineVecInner<T, N> {
     #[inline]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::Inline {
             len: 0,
             data: super::uninit_array(),
         }
     }
 
-    /// Returns a slice to the contents of this vector
     pub fn as_slice(&self) -> &[T] {
         match self {
             Self::Heap(v) => v.as_slice(),
@@ -92,12 +132,11 @@ impl<T, const N: usize> InlineVec<T, N> {
         }
     }
 
-    /// Returns an iterator over the elements of the vector
+    #[inline]
     pub fn iter(&self) -> InlineVecIter<'_, T, N> {
         InlineVecIter { idx: 0, vec: self }
     }
 
-    /// Returns the length of this vector
     #[inline]
     pub fn len(&self) -> usize {
         match self {
@@ -106,7 +145,6 @@ impl<T, const N: usize> InlineVec<T, N> {
         }
     }
 
-    /// Returns the element at a given index
     pub fn get(&self, idx: usize) -> Option<&T> {
         match self {
             Self::Inline { data, len } => {
@@ -120,18 +158,17 @@ impl<T, const N: usize> InlineVec<T, N> {
         }
     }
 
-    /// Pushes a new element to the end of this vector
-    pub fn push(&mut self, value: T) -> usize {
+    pub fn push(&mut self, value: T) {
         let (array, len) = match self {
             Self::Inline { data, len } => (data, len),
             Self::Heap(vec) => {
                 vec.push(value);
-                return vec.len() - 1;
+                return;
             }
         };
 
         if *len >= N {
-            let mut vec = Vec::with_capacity(*len);
+            let mut vec = Vec::with_capacity(*len + 1);
 
             // move old elements to heap
             for element in array.iter_mut().take(*len) {
@@ -142,19 +179,13 @@ impl<T, const N: usize> InlineVec<T, N> {
 
             // push the new element
             vec.push(value);
-            let len = vec.len() - 1;
-
-            *self = InlineVec::Heap(vec);
-
-            len - 1
+            *self = InlineVecInner::Heap(vec);
         } else {
             array[*len].write(value);
             *len += 1;
-            *len - 1
         }
     }
 
-    /// Checks whether this vector is allocated on the heap
     #[inline]
     pub fn is_heap_allocated(&self) -> bool {
         matches!(self, Self::Heap(_))
@@ -165,13 +196,13 @@ impl<T, const N: usize> Index<usize> for InlineVec<T, N> {
     type Output = T;
 
     fn index(&self, idx: usize) -> &Self::Output {
-        self.get(idx).expect("index out of bounds")
+        self.0.get(idx).expect("index out of bounds")
     }
 }
 
 /// An iterator over the elements stored in an [`InlineVec`]
 pub struct InlineVecIter<'a, T, const N: usize> {
-    vec: &'a InlineVec<T, N>,
+    vec: &'a InlineVecInner<T, N>,
     idx: usize,
 }
 
@@ -190,7 +221,7 @@ mod tests {
 
     #[test]
     fn inlinevec_iter() {
-        let mut x = InlineVec::<usize, 2>::new();
+        let mut x = InlineVecInner::<usize, 2>::new();
         x.push(13);
         x.push(42);
         x.push(17);
@@ -205,7 +236,7 @@ mod tests {
 
     #[test]
     fn inlinevec() {
-        let mut x = InlineVec::<usize, 4>::new();
+        let mut x = InlineVecInner::<usize, 4>::new();
         assert_eq!(x.len(), 0);
         assert_eq!(x.get(0), None);
         assert!(!x.is_heap_allocated());
