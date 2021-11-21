@@ -16,6 +16,7 @@ pub type ClassVec = InlineVec<NodeHandle, 2>;
 
 /// HTML Version (<!DOCTYPE>)
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(C)]
 pub enum HTMLVersion {
     /// HTML Version 5
     HTML5,
@@ -61,6 +62,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[inline(always)]
     fn register_tag(&mut self, node: Node<'a>) -> NodeHandle {
         self.tags.push(node);
         NodeHandle::new(self.tags.len() - 1)
@@ -193,7 +195,8 @@ impl<'a> Parser<'a> {
         Some(attributes)
     }
 
-    fn parse_tag(&mut self, skip_current: bool) -> Option<Node<'a>> {
+    #[inline(never)]
+    fn parse_tag(&mut self, skip_current: bool) -> Option<NodeHandle> {
         let start = self.stream.idx;
 
         if skip_current {
@@ -213,7 +216,7 @@ impl<'a> Parser<'a> {
                 let comment = self.skip_comment()?;
 
                 // Comments are ignored, so we return no element
-                return Some(Node::Comment(comment.into()));
+                return Some(self.register_tag(Node::Comment(comment.into())));
             }
 
             let name = self.read_ident()?.to_ascii_uppercase();
@@ -258,12 +261,12 @@ impl<'a> Parser<'a> {
 
             // If this is a self-closing tag (e.g. <img />), we want to return early instead of
             // reading children as the next nodes don't belong to this tag
-            return Some(Node::Tag(HTMLTag::new(
+            return Some(self.register_tag(Node::Tag(HTMLTag::new(
                 name.into(),
                 attributes,
                 children,
                 raw.into(),
-            )));
+            ))));
         }
 
         self.stream.expect_and_skip(b'>')?;
@@ -274,12 +277,12 @@ impl<'a> Parser<'a> {
             // Some HTML tags don't have contents (e.g. <br>),
             // so we need to return early
             // Without it, any following tags would be sub-nodes
-            return Some(Node::Tag(HTMLTag::new(
+            return Some(self.register_tag(Node::Tag(HTMLTag::new(
                 name.into(),
                 attributes,
                 children,
                 raw.into(),
-            )));
+            ))));
         }
 
         while !self.stream.is_eof() {
@@ -287,7 +290,6 @@ impl<'a> Parser<'a> {
 
             let idx = self.stream.idx;
 
-            // TODO: panic
             let slice = self
                 .stream
                 .slice_checked(idx, idx + constants::END_OF_TAG.len());
@@ -309,12 +311,12 @@ impl<'a> Parser<'a> {
 
         let raw = self.stream.slice_from(start);
 
-        Some(Node::Tag(HTMLTag::new(
+        Some(self.register_tag(Node::Tag(HTMLTag::new(
             name.into(),
             attributes,
             children,
             raw.into(),
-        )))
+        ))))
     }
 
     fn parse_single(&mut self) -> Option<NodeHandle> {
@@ -323,8 +325,7 @@ impl<'a> Parser<'a> {
         let ch = self.stream.current_cpy()?;
 
         if ch == constants::OPENING_TAG {
-            if let Some(tag) = self.parse_tag(true) {
-                let handle = self.register_tag(tag);
+            if let Some(handle) = self.parse_tag(true) {
                 let tag_id = handle.get_inner();
 
                 let (id, class) = if let Some(Node::Tag(tag)) = self.tags.get(tag_id) {
@@ -334,7 +335,7 @@ impl<'a> Parser<'a> {
                 };
 
                 if let Some(id) = id {
-                    self.ids.insert(id.clone(), handle);
+                    self.ids.insert(id, handle);
                 }
 
                 if let Some(class) = class {
@@ -347,11 +348,11 @@ impl<'a> Parser<'a> {
             }
         } else {
             let node = Node::Raw(self.read_to(b'<').into());
-            let tag_id = self.register_tag(node);
-            Some(tag_id)
+            Some(self.register_tag(node))
         }
     }
 
+    #[inline(never)]
     fn process_class(&mut self, class: &Bytes<'a>, element: NodeHandle) {
         let raw = class.raw();
 

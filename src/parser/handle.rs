@@ -14,7 +14,7 @@ pub struct NodeHandle(usize);
 impl NodeHandle {
     /// Creates a new handle to the given node
     #[inline]
-    pub(crate) fn new(node: usize) -> Self {
+    pub fn new(node: usize) -> Self {
         NodeHandle(node)
     }
 
@@ -25,7 +25,7 @@ impl NodeHandle {
 
     /// Returns the internal unique Node ID that maps to a specific node in the node table
     #[inline]
-    pub(crate) fn get_inner(&self) -> usize {
+    pub fn get_inner(&self) -> usize {
         self.0
     }
 }

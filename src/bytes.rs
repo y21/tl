@@ -37,6 +37,11 @@ impl<'a> Bytes<'a> {
     pub fn raw(&self) -> &'a [u8] {
         self.0
     }
+
+    /// Returns a read-only raw pointer to the inner data
+    pub fn as_ptr(&self) -> *const u8 {
+        self.0.as_ptr()
+    }
 }
 
 /// A trait for converting a type into Bytes

@@ -6,13 +6,14 @@ use std::borrow::Cow;
 
 use super::{handle::NodeHandle, Parser};
 
-const INLINE_LENGTH: usize = 4;
+const INLINED_ATTRIBUTES: usize = 4;
+const INLINED_SUBNODES: usize = 4;
 
 /// Stores all attributes of an HTML tag, as well as additional metadata such as `id` and `class`
 #[derive(Debug, Clone)]
 pub struct Attributes<'a> {
     /// Raw attributes (maps attribute key to attribute value)
-    pub raw: InlineHashMap<Bytes<'a>, Option<Bytes<'a>>, INLINE_LENGTH>,
+    pub raw: InlineHashMap<Bytes<'a>, Option<Bytes<'a>>, INLINED_ATTRIBUTES>,
     /// The ID of this HTML element, if present
     pub id: Option<Bytes<'a>>,
     /// A list of class names of this HTML element, if present
@@ -28,6 +29,18 @@ impl<'a> Attributes<'a> {
             class: None,
         }
     }
+
+    /// Counts the number of attributes
+    pub fn len(&self) -> usize {
+        let mut raw = self.raw.len();
+        if self.id.is_some() {
+            raw += 1;
+        }
+        if self.class.is_some() {
+            raw += 1;
+        }
+        raw
+    }
 }
 
 /// Represents a single HTML element
@@ -35,17 +48,17 @@ impl<'a> Attributes<'a> {
 pub struct HTMLTag<'a> {
     pub(crate) _name: Bytes<'a>,
     pub(crate) _attributes: Attributes<'a>,
-    pub(crate) _children: InlineVec<NodeHandle, INLINE_LENGTH>,
+    pub(crate) _children: InlineVec<NodeHandle, INLINED_SUBNODES>,
     pub(crate) _raw: Bytes<'a>,
 }
 
 impl<'a> HTMLTag<'a> {
     /// Creates a new HTMLTag
-    #[inline]
+    #[inline(always)]
     pub(crate) fn new(
         name: Bytes<'a>,
         attr: Attributes<'a>,
-        children: InlineVec<NodeHandle, INLINE_LENGTH>,
+        children: InlineVec<NodeHandle, INLINED_SUBNODES>,
         raw: Bytes<'a>,
     ) -> Self {
         Self {
@@ -153,6 +166,15 @@ impl<'a> Node<'a> {
             Node::Comment(_) => Cow::Borrowed(""),
             Node::Raw(r) => r.as_utf8_str(),
             Node::Tag(t) => t.inner_text(parser),
+        }
+    }
+
+    /// Returns the inner HTML of this node
+    pub fn inner_html(&self) -> &Bytes<'a> {
+        match self {
+            Node::Comment(c) => c,
+            Node::Raw(r) => r,
+            Node::Tag(t) => t.inner_html(),
         }
     }
 
