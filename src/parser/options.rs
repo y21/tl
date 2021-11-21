@@ -1,6 +1,7 @@
 mod flags {
-    pub const TRACK_IDS: u8 = 1;
-    pub const TRACK_CLASSES: u8 = 2;
+    pub const TRACK_IDS: u8 = 1 << 0;
+    pub const TRACK_CLASSES: u8 = 1 << 1;
+    pub const HIGHEST: u8 = TRACK_CLASSES;
 }
 
 /// Options for the HTML Parser
@@ -19,9 +20,23 @@ impl Default for ParserOptions {
 }
 
 impl ParserOptions {
-    /// Creates a new ParserOptions with no flags set
+    /// Creates a new [ParserOptions] with no flags set
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates a [ParserOptions] from a bitset
+    pub fn from_raw_checked(flags: u8) -> Option<Self> {
+        if flags > flags::HIGHEST * 2 - 1 {
+            None
+        } else {
+            Some(Self(flags))
+        }
+    }
+
+    /// Returns the raw flags of this bitset
+    pub fn to_raw(&self) -> u8 {
+        self.0
     }
 
     fn set_flag(&mut self, flag: u8) {
