@@ -23,7 +23,7 @@ Finding an element by its id attribute and printing the inner text:
 ```rust
 fn main() {
     let input = r#"<p id="text">Hello</p>"#;
-    let dom = tl::parse(input);
+    let dom = tl::parse(input, tl::ParserOptions::default());
     let parser = dom.parser();
     let element = dom.get_element_by_id("text")
         .expect("Failed to find element")
@@ -38,7 +38,7 @@ Iterating over the subnodes of an HTML document:
 ```rust
 fn main() {
     let input = r#"<div><img src="cool-image.png" /></div>"#;
-    let dom = tl::parse(input);
+    let dom = tl::parse(input, tl::ParserOptions::default());
     let img = dom.nodes()
         .iter()
         .find(|node| {

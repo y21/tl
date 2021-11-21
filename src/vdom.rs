@@ -1,5 +1,5 @@
-use crate::parser::ClassVec;
 use crate::parser::NodeHandle;
+use crate::ParserOptions;
 use crate::{bytes::AsBytes, parser::HTMLVersion};
 use crate::{Node, Parser};
 use std::marker::PhantomData;
@@ -33,15 +33,57 @@ impl<'a> VDom<'a> {
     where
         S: AsBytes,
     {
-        self.parser.ids.get(&id.as_bytes()).copied()
+        let bytes = id.as_bytes();
+        let parser = self.parser();
+
+        if parser.options.is_tracking_ids() {
+            parser.ids.get(&bytes).copied()
+        } else {
+            self.nodes()
+                .iter()
+                .enumerate()
+                .find(|(_, node)| {
+                    node.as_tag().map_or(false, |tag| {
+                        tag._attributes.id.as_ref().map_or(false, |x| x.eq(&bytes))
+                    })
+                })
+                .map(|(id, _)| NodeHandle::new(id))
+        }
     }
 
     /// Returns a list of elements that match a given class name.
-    pub fn get_elements_by_class_name<'b, S: ?Sized>(&'b self, id: &'b S) -> Option<&'b ClassVec>
+    pub fn get_elements_by_class_name<'b, S: ?Sized>(
+        &'b self,
+        id: &'b S,
+    ) -> Box<dyn Iterator<Item = NodeHandle> + '_>
     where
         S: AsBytes,
     {
-        self.parser.classes.get(&id.as_bytes())
+        let bytes = id.as_bytes();
+        let parser = self.parser();
+
+        if parser.options.is_tracking_classes() {
+            parser
+                .classes
+                .get(&bytes)
+                .map(|x| Box::new(x.iter().cloned()) as Box<dyn Iterator<Item = NodeHandle>>)
+                .unwrap_or_else(|| Box::new(std::iter::empty()))
+        } else {
+            let member = bytes.as_utf8_str();
+            let iter = self
+                .nodes()
+                .iter()
+                .enumerate()
+                .filter_map(move |(id, node)| {
+                    node.as_tag().and_then(|tag| {
+                        tag._attributes
+                            .is_class_member(member.as_ref())
+                            .then(|| NodeHandle::new(id))
+                    })
+                });
+
+            Box::new(iter)
+        }
     }
 
     /// Returns a slice of *all* the elements in the HTML document
@@ -109,13 +151,13 @@ unsafe impl<'a> Sync for VDomGuard<'a> {}
 
 impl<'a> VDomGuard<'a> {
     /// Parses the input string
-    pub(crate) fn parse(input: String) -> VDomGuard<'a> {
+    pub(crate) fn parse(input: String, options: ParserOptions) -> VDomGuard<'a> {
         let ptr = Box::into_raw(input.into_boxed_str());
 
         // SAFETY: Shortening the lifetime of the input string is fine, as it's `'static`
         let input_extended: &'a str = unsafe { &*ptr };
 
-        let parser = Parser::new(input_extended).parse();
+        let parser = Parser::new(input_extended, options).parse();
 
         Self {
             ptr,

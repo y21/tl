@@ -3,9 +3,9 @@ use super::{
     handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
-use crate::stream::Stream;
 use crate::util;
 use crate::{bytes::Bytes, inline::vec::InlineVec};
+use crate::{stream::Stream, ParserOptions};
 use std::collections::HashMap;
 
 /// A list of HTML nodes
@@ -34,6 +34,8 @@ pub enum HTMLVersion {
 /// Instead, users must call `tl::parse()` and use the returned `VDom`.
 #[derive(Debug)]
 pub struct Parser<'a> {
+    /// Specified options for this HTML parser
+    pub(crate) options: ParserOptions,
     /// A global collection of all HTML tags that appear in the source code
     ///
     /// HTML Nodes contain indicies into this vector
@@ -51,8 +53,9 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn new(input: &str) -> Parser {
+    pub(crate) fn new(input: &str, options: ParserOptions) -> Parser {
         Parser {
+            options,
             tags: Vec::new(),
             stream: Stream::new(input.as_bytes()),
             ast: Vec::new(),
@@ -328,18 +331,20 @@ impl<'a> Parser<'a> {
             if let Some(handle) = self.parse_tag(true) {
                 let tag_id = handle.get_inner();
 
-                let (id, class) = if let Some(Node::Tag(tag)) = self.tags.get(tag_id) {
-                    (tag._attributes.id.clone(), tag._attributes.class.clone())
-                } else {
-                    (None, None)
-                };
+                if self.options.is_tracking() {
+                    let (id, class) = if let Some(Node::Tag(tag)) = self.tags.get(tag_id) {
+                        (tag._attributes.id.clone(), tag._attributes.class.clone())
+                    } else {
+                        (None, None)
+                    };
 
-                if let Some(id) = id {
-                    self.ids.insert(id, handle);
-                }
+                    if let Some(id) = id {
+                        self.ids.insert(id, handle);
+                    }
 
-                if let Some(class) = class {
-                    self.process_class(&class, handle);
+                    if let Some(class) = class {
+                        self.process_class(&class, handle);
+                    }
                 }
 
                 Some(handle)

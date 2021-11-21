@@ -41,6 +41,13 @@ impl<'a> Attributes<'a> {
         }
         raw
     }
+
+    /// Checks whether a given string is in the class names list
+    pub fn is_class_member(&self, member: &str) -> bool {
+        self.class.as_ref().map_or(false, |b| {
+            b.as_utf8_str().split_whitespace().any(|x| x == member)
+        })
+    }
 }
 
 /// Represents a single HTML element
