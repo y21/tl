@@ -6,12 +6,14 @@ use std::borrow::Cow;
 pub struct Bytes<'a>(&'a [u8]);
 
 impl<'a> From<&'a str> for Bytes<'a> {
+    #[inline]
     fn from(s: &'a str) -> Self {
         Self(s.as_bytes())
     }
 }
 
 impl<'a> From<&'a [u8]> for Bytes<'a> {
+    #[inline]
     fn from(s: &'a [u8]) -> Self {
         Self(s)
     }
@@ -34,6 +36,11 @@ impl<'a> Bytes<'a> {
     /// Returns the raw data wrapped by this struct
     pub fn raw(&self) -> &'a [u8] {
         self.0
+    }
+
+    /// Returns a read-only raw pointer to the inner data
+    pub fn as_ptr(&self) -> *const u8 {
+        self.0.as_ptr()
     }
 }
 

@@ -1,17 +1,22 @@
 use super::{
     constants,
+    handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
-use crate::bytes::Bytes;
-use crate::stream::Stream;
 use crate::util;
-use std::{collections::HashMap, rc::Rc};
+use crate::{bytes::Bytes, inline::vec::InlineVec};
+use crate::{stream::Stream, ParserOptions};
+use std::collections::HashMap;
 
-/// A list of shared HTML nodes
-pub type Tree<'a> = Vec<Rc<Node<'a>>>;
+/// A list of HTML nodes
+pub type Tree<'a> = Vec<Node<'a>>;
+
+/// Inline class vector
+pub type ClassVec = InlineVec<NodeHandle, 2>;
 
 /// HTML Version (<!DOCTYPE>)
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(C)]
 pub enum HTMLVersion {
     /// HTML Version 5
     HTML5,
@@ -23,18 +28,35 @@ pub enum HTMLVersion {
     FramesetHTML401,
 }
 
+/// The main HTML parser
+///
+/// Users of this library are not supposed to directly construct this struct.
+/// Instead, users must call `tl::parse()` and use the returned `VDom`.
 #[derive(Debug)]
 pub struct Parser<'a> {
-    pub stream: Stream<'a, u8>,
-    pub ast: Tree<'a>,
-    pub ids: HashMap<Bytes<'a>, Rc<Node<'a>>>,
-    pub classes: HashMap<Bytes<'a>, Vec<Rc<Node<'a>>>>,
-    pub version: Option<HTMLVersion>,
+    /// Specified options for this HTML parser
+    pub(crate) options: ParserOptions,
+    /// A global collection of all HTML tags that appear in the source code
+    ///
+    /// HTML Nodes contain indicies into this vector
+    pub(crate) tags: Tree<'a>,
+    /// The inner stream that is used to iterate through the HTML source
+    pub(crate) stream: Stream<'a, u8>,
+    /// The topmost HTML nodes
+    pub(crate) ast: Vec<NodeHandle>,
+    /// A HashMap that maps Tag ID to a Node ID
+    pub(crate) ids: HashMap<Bytes<'a>, NodeHandle>,
+    /// A HashMap that maps Tag Class to a Node ID
+    pub(crate) classes: HashMap<Bytes<'a>, ClassVec>,
+    /// The current HTML version, if set
+    pub(crate) version: Option<HTMLVersion>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: &str) -> Parser {
+    pub(crate) fn new(input: &str, options: ParserOptions) -> Parser {
         Parser {
+            options,
+            tags: Vec::new(),
             stream: Stream::new(input.as_bytes()),
             ast: Vec::new(),
             ids: HashMap::new(),
@@ -43,31 +65,37 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[inline(always)]
+    fn register_tag(&mut self, node: Node<'a>) -> NodeHandle {
+        self.tags.push(node);
+        NodeHandle::new(self.tags.len() - 1)
+    }
+
     fn skip_whitespaces(&mut self) {
         self.read_while(&[b' ', b'\n']);
     }
 
-    fn read_to(&mut self, terminator: &[u8]) -> &'a [u8] {
+    fn read_to(&mut self, terminator: u8) -> &'a [u8] {
         let start = self.stream.idx;
 
         while !self.stream.is_eof() {
-            let ch = self.stream.current_unchecked();
+            // SAFETY: no bound check necessary because it's checked in the condition
+            let ch = unsafe { self.stream.current_cpy_unchecked() };
 
-            let end = self.stream.idx;
-
-            if terminator.contains(ch) {
-                return self.stream.slice_unchecked(start, end);
+            if terminator == ch {
+                return unsafe { self.stream.slice_unchecked(start, self.stream.idx) };
             }
 
             self.stream.advance();
         }
 
-        self.stream.slice_unchecked(start, self.stream.idx)
+        self.stream.slice(start, self.stream.idx)
     }
 
     fn read_while(&mut self, terminator: &[u8]) {
         while !self.stream.is_eof() {
-            let ch = self.stream.current_unchecked();
+            // SAFETY: no bound check necessary because it's checked in the condition
+            let ch = unsafe { self.stream.current_unchecked() };
 
             if !terminator.contains(ch) {
                 break;
@@ -81,11 +109,11 @@ impl<'a> Parser<'a> {
         let start = self.stream.idx;
 
         while !self.stream.is_eof() {
-            let ch = self.stream.current_cpy()?;
+            // SAFETY: no bound check necessary because it's checked in the condition
+            let ch = unsafe { self.stream.current_cpy_unchecked() };
 
             if !util::is_ident(ch) {
-                let idx = self.stream.idx;
-                return Some(self.stream.slice_unchecked(start, idx));
+                return Some(unsafe { self.stream.slice_unchecked(start, self.stream.idx) });
             }
 
             self.stream.advance();
@@ -110,7 +138,7 @@ impl<'a> Parser<'a> {
                 let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
 
                 if is_end_of_comment {
-                    return Some(self.stream.slice_unchecked(start, self.stream.idx));
+                    return Some(unsafe { self.stream.slice_unchecked(start, self.stream.idx) });
                 }
             }
 
@@ -132,18 +160,18 @@ impl<'a> Parser<'a> {
         self.skip_whitespaces();
         let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\''])?;
 
-        let value = self.read_to(&[quote]);
+        let value = self.read_to(quote);
 
         Some((name, Some(value)))
     }
 
-    fn parse_attributes(&mut self) -> Attributes<'a> {
+    fn parse_attributes(&mut self) -> Option<Attributes<'a>> {
         let mut attributes = Attributes::new();
 
         while !self.stream.is_eof() {
             self.skip_whitespaces();
 
-            let cur = self.stream.current_unchecked();
+            let cur = self.stream.current()?;
 
             if constants::SELF_CLOSING.contains(cur) {
                 break;
@@ -167,10 +195,11 @@ impl<'a> Parser<'a> {
             self.stream.advance();
         }
 
-        attributes
+        Some(attributes)
     }
 
-    fn parse_tag(&mut self, skip_current: bool) -> Option<Node<'a>> {
+    #[inline(never)]
+    fn parse_tag(&mut self, skip_current: bool) -> Option<NodeHandle> {
         let start = self.stream.idx;
 
         if skip_current {
@@ -190,7 +219,7 @@ impl<'a> Parser<'a> {
                 let comment = self.skip_comment()?;
 
                 // Comments are ignored, so we return no element
-                return Some(Node::Comment(comment.into()));
+                return Some(self.register_tag(Node::Comment(comment.into())));
             }
 
             let name = self.read_ident()?.to_ascii_uppercase();
@@ -220,9 +249,9 @@ impl<'a> Parser<'a> {
 
         let name = self.read_ident()?;
 
-        let attributes = self.parse_attributes();
+        let attributes = self.parse_attributes()?;
 
-        let mut children = Vec::new();
+        let mut children = InlineVec::new();
 
         let is_self_closing = self.stream.expect_and_skip_cond(b'/');
 
@@ -235,12 +264,12 @@ impl<'a> Parser<'a> {
 
             // If this is a self-closing tag (e.g. <img />), we want to return early instead of
             // reading children as the next nodes don't belong to this tag
-            return Some(Node::Tag(HTMLTag::new(
-                Some(name.into()),
+            return Some(self.register_tag(Node::Tag(HTMLTag::new(
+                name.into(),
                 attributes,
                 children,
                 raw.into(),
-            )));
+            ))));
         }
 
         self.stream.expect_and_skip(b'>')?;
@@ -251,12 +280,12 @@ impl<'a> Parser<'a> {
             // Some HTML tags don't have contents (e.g. <br>),
             // so we need to return early
             // Without it, any following tags would be sub-nodes
-            return Some(Node::Tag(HTMLTag::new(
-                Some(name.into()),
+            return Some(self.register_tag(Node::Tag(HTMLTag::new(
+                name.into(),
                 attributes,
                 children,
                 raw.into(),
-            )));
+            ))));
         }
 
         while !self.stream.is_eof() {
@@ -264,7 +293,10 @@ impl<'a> Parser<'a> {
 
             let idx = self.stream.idx;
 
-            let slice = self.stream.slice(idx, idx + constants::END_OF_TAG.len());
+            let slice = self
+                .stream
+                .slice_checked(idx, idx + constants::END_OF_TAG.len());
+
             if slice.eq(constants::END_OF_TAG) {
                 self.stream.advance_by(constants::END_OF_TAG.len());
                 self.read_ident()?;
@@ -275,52 +307,58 @@ impl<'a> Parser<'a> {
             }
 
             // TODO: "partial" JS parser is needed to deal with script tags
-            let node = self.parse_single()?;
+            let node_id = self.parse_single()?;
 
-            children.push(node);
+            children.push(node_id);
         }
 
         let raw = self.stream.slice_from(start);
 
-        Some(Node::Tag(HTMLTag::new(
-            Some(name.into()),
+        Some(self.register_tag(Node::Tag(HTMLTag::new(
+            name.into(),
             attributes,
             children,
             raw.into(),
-        )))
+        ))))
     }
 
-    fn parse_single(&mut self) -> Option<Rc<Node<'a>>> {
+    fn parse_single(&mut self) -> Option<NodeHandle> {
         self.skip_whitespaces();
 
         let ch = self.stream.current_cpy()?;
 
         if ch == constants::OPENING_TAG {
-            if let Some(tag) = self.parse_tag(true) {
-                let tag_rc = Rc::new(tag);
+            if let Some(handle) = self.parse_tag(true) {
+                let tag_id = handle.get_inner();
 
-                if let Node::Tag(tag) = &*tag_rc {
-                    let (id, class) = (&tag._attributes.id, &tag._attributes.class);
+                if self.options.is_tracking() {
+                    let (id, class) = if let Some(Node::Tag(tag)) = self.tags.get(tag_id) {
+                        (tag._attributes.id.clone(), tag._attributes.class.clone())
+                    } else {
+                        (None, None)
+                    };
 
                     if let Some(id) = id {
-                        self.ids.insert(id.clone(), tag_rc.clone());
+                        self.ids.insert(id, handle);
                     }
 
                     if let Some(class) = class {
-                        self.process_class(class, tag_rc.clone());
+                        self.process_class(&class, handle);
                     }
                 }
 
-                Some(tag_rc)
+                Some(handle)
             } else {
                 None
             }
         } else {
-            Some(Rc::new(Node::Raw(self.read_to(&[b'<']).into())))
+            let node = Node::Raw(self.read_to(b'<').into());
+            Some(self.register_tag(node))
         }
     }
 
-    fn process_class(&mut self, class: &Bytes<'a>, element: Rc<Node<'a>>) {
+    #[inline(never)]
+    fn process_class(&mut self, class: &Bytes<'a>, element: NodeHandle) {
         let raw = class.raw();
 
         let mut stream = Stream::new(raw);
@@ -328,11 +366,12 @@ impl<'a> Parser<'a> {
         let mut last = 0;
 
         while !stream.is_eof() {
-            let cur = stream.current_unchecked();
+            // SAFETY: no bound check necessary because it's checked in the condition
+            let cur = unsafe { stream.current_cpy_unchecked() };
 
             let is_last_char = stream.idx == raw.len() - 1;
 
-            if util::is_strict_whitespace(*cur) || is_last_char {
+            if util::is_strict_whitespace(cur) || is_last_char {
                 let idx = if is_last_char {
                     stream.idx + 1
                 } else {
@@ -343,8 +382,8 @@ impl<'a> Parser<'a> {
                 if !slice.is_empty() {
                     self.classes
                         .entry(slice.into())
-                        .or_insert_with(Vec::new)
-                        .push(element.clone());
+                        .or_insert_with(InlineVec::new)
+                        .push(element);
                 }
 
                 last = idx + 1;
@@ -352,6 +391,12 @@ impl<'a> Parser<'a> {
 
             stream.advance();
         }
+    }
+
+    /// Resolves an internal Node ID obtained from a NodeHandle to a Node
+    #[inline]
+    pub fn resolve_node_id(&self, id: usize) -> Option<&Node<'a>> {
+        self.tags.get(id)
     }
 
     pub(crate) fn parse(mut self) -> Parser<'a> {
