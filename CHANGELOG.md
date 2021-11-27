@@ -1,3 +1,6 @@
+# 0.4.1
+- Fixed an infinite loop bug in `parse_single` and a panic that occurs when trying to parse incomplete markup tags (`<!`)
+
 # 0.4.0
 - Remove `AsBytes` trait in favor of `From<T> for Bytes`
 - Add `VDom::query_selector()`

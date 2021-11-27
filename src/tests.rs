@@ -179,6 +179,14 @@ fn dom_nodes() {
 }
 
 #[test]
+fn fuzz() {
+    // Some tests that would previously panic or end in an infinite loop
+    // We don't need to assert anything here, just see that they finish
+    parse("J\x00<", ParserOptions::default());
+    parse("<!J", ParserOptions::default());
+}
+
+#[test]
 fn query_selector_simple() {
     let input = "<div><p class=\"hi\">hello</p></div>";
     let dom = parse(input, ParserOptions::default());

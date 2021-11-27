@@ -211,7 +211,7 @@ impl<'a> Parser<'a> {
         if markup_declaration {
             let is_comment = self
                 .stream
-                .slice(self.stream.idx, self.stream.idx + constants::COMMENT.len())
+                .slice_checked(self.stream.idx, self.stream.idx + constants::COMMENT.len())
                 .eq(constants::COMMENT);
 
             if is_comment {
@@ -349,6 +349,7 @@ impl<'a> Parser<'a> {
 
                 Some(handle)
             } else {
+                self.stream.advance();
                 None
             }
         } else {
