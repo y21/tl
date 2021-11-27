@@ -1,6 +1,10 @@
+use crate::parser::HTMLVersion;
 use crate::parser::NodeHandle;
+use crate::queryselector;
+use crate::queryselector::QuerySelectorIterator;
+use crate::Bytes;
+use crate::InnerNodeHandle;
 use crate::ParserOptions;
-use crate::{bytes::AsBytes, parser::HTMLVersion};
 use crate::{Node, Parser};
 use std::marker::PhantomData;
 
@@ -29,11 +33,11 @@ impl<'a> VDom<'a> {
     }
 
     /// Finds an element by its `id` attribute.
-    pub fn get_element_by_id<'b, S: ?Sized>(&'b self, id: &'b S) -> Option<NodeHandle>
+    pub fn get_element_by_id<'b, S>(&'b self, id: S) -> Option<NodeHandle>
     where
-        S: AsBytes,
+        S: Into<Bytes<'a>>,
     {
-        let bytes = id.as_bytes();
+        let bytes: Bytes = id.into();
         let parser = self.parser();
 
         if parser.options.is_tracking_ids() {
@@ -47,19 +51,19 @@ impl<'a> VDom<'a> {
                         tag._attributes.id.as_ref().map_or(false, |x| x.eq(&bytes))
                     })
                 })
-                .map(|(id, _)| NodeHandle::new(id))
+                .map(|(id, _)| NodeHandle::new(id as InnerNodeHandle))
         }
     }
 
     /// Returns a list of elements that match a given class name.
-    pub fn get_elements_by_class_name<'b, S: ?Sized>(
+    pub fn get_elements_by_class_name<'b, S>(
         &'b self,
-        id: &'b S,
+        id: S,
     ) -> Box<dyn Iterator<Item = NodeHandle> + '_>
     where
-        S: AsBytes,
+        S: Into<Bytes<'a>>,
     {
-        let bytes = id.as_bytes();
+        let bytes: Bytes = id.into();
         let parser = self.parser();
 
         if parser.options.is_tracking_classes() {
@@ -78,7 +82,7 @@ impl<'a> VDom<'a> {
                     node.as_tag().and_then(|tag| {
                         tag._attributes
                             .is_class_member(member.as_ref())
-                            .then(|| NodeHandle::new(id))
+                            .then(|| NodeHandle::new(id as InnerNodeHandle))
                     })
                 });
 
@@ -128,6 +132,24 @@ impl<'a> VDom<'a> {
         }
 
         None
+    }
+
+    /// Returns an iterator over elements that match the given query selector.
+    ///
+    /// # Example
+    /// ```
+    /// let dom = tl::parse("<div><p class=\"foo\">bar</div>", tl::ParserOptions::default());
+    /// let handle = dom.query_selector("p.foo").and_then(|mut iter| iter.next()).unwrap();
+    /// let node = handle.get(dom.parser()).unwrap();
+    /// assert_eq!(node.inner_text(dom.parser()), "bar");
+    /// ```
+    pub fn query_selector<'b>(
+        &'b self,
+        selector: &'b str,
+    ) -> Option<QuerySelectorIterator<'a, 'b>> {
+        let selector = queryselector::Parser::new(selector.as_bytes()).selector()?;
+        let iter = queryselector::QuerySelectorIterator::new(selector, self);
+        Some(iter)
     }
 }
 

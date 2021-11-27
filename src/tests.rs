@@ -151,7 +151,7 @@ fn with() {
     let tag = dom
         .nodes()
         .iter()
-        .find(|x| x.as_tag().map_or(false, |x| x.name() == &"span".into()));
+        .find(|x| x.as_tag().map_or(false, |x| x.name() == "span".into()));
 
     assert_eq!(
         tag.map(|tag| tag.inner_text(parser)),
@@ -176,4 +176,16 @@ fn dom_nodes() {
         .find(|x| x.as_tag().map_or(false, |x| x.name().eq(&"a".into())));
 
     assert_eq!(element.map(|x| x.inner_text(parser)), Some("nested".into()));
+}
+
+#[test]
+fn query_selector_simple() {
+    let input = "<div><p class=\"hi\">hello</p></div>";
+    let dom = parse(input, ParserOptions::default());
+    let parser = dom.parser();
+    let mut selector = dom.query_selector(".hi").unwrap();
+    let el = force_as_tag(selector.next().and_then(|x| x.get(parser)).unwrap());
+
+    assert_eq!(dom.nodes().len(), 3);
+    assert_eq!(el.inner_text(parser), "hello");
 }

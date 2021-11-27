@@ -5,13 +5,14 @@ mod bytes;
 /// Inline data structures
 pub mod inline;
 mod parser;
+mod queryselector;
 mod stream;
 #[cfg(test)]
 mod tests;
 mod util;
 mod vdom;
 
-pub use bytes::{AsBytes, Bytes};
+pub use bytes::Bytes;
 pub use parser::*;
 pub use vdom::{VDom, VDomGuard};
 

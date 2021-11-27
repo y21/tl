@@ -2,6 +2,9 @@ use crate::Node;
 
 use super::Parser;
 
+/// The inner type of a NodeHandle, used to represent an index into the tags table
+pub type InnerNodeHandle = usize;
+
 /// An external handle to a HTML node, originally obtained from a [Parser]
 ///
 /// It contains an identifier that uniquely identifies an HTML node.
@@ -9,12 +12,12 @@ use super::Parser;
 /// To get a [`Node`] out of a [`NodeHandle`], call `NodeHandle::get()`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
-pub struct NodeHandle(usize);
+pub struct NodeHandle(InnerNodeHandle);
 
 impl NodeHandle {
     /// Creates a new handle to the given node
     #[inline]
-    pub fn new(node: usize) -> Self {
+    pub fn new(node: InnerNodeHandle) -> Self {
         NodeHandle(node)
     }
 
@@ -25,7 +28,7 @@ impl NodeHandle {
 
     /// Returns the internal unique Node ID that maps to a specific node in the node table
     #[inline]
-    pub fn get_inner(&self) -> usize {
+    pub fn get_inner(&self) -> InnerNodeHandle {
         self.0
     }
 }

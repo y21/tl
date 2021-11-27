@@ -3,9 +3,9 @@ use super::{
     handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
-use crate::util;
 use crate::{bytes::Bytes, inline::vec::InlineVec};
 use crate::{stream::Stream, ParserOptions};
+use crate::{util, InnerNodeHandle};
 use std::collections::HashMap;
 
 /// A list of HTML nodes
@@ -395,7 +395,7 @@ impl<'a> Parser<'a> {
 
     /// Resolves an internal Node ID obtained from a NodeHandle to a Node
     #[inline]
-    pub fn resolve_node_id(&self, id: usize) -> Option<&Node<'a>> {
+    pub fn resolve_node_id(&self, id: InnerNodeHandle) -> Option<&Node<'a>> {
         self.tags.get(id)
     }
 

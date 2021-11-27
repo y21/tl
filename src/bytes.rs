@@ -43,34 +43,3 @@ impl<'a> Bytes<'a> {
         self.0.as_ptr()
     }
 }
-
-/// A trait for converting a type into Bytes
-pub trait AsBytes {
-    /// Converts `self` to `Bytes`
-    fn as_bytes(&self) -> Bytes<'_>;
-}
-
-impl AsBytes for String {
-    fn as_bytes(&self) -> Bytes<'_> {
-        Bytes::from(&self[..])
-    }
-}
-
-impl<'a> AsBytes for Bytes<'a> {
-    fn as_bytes(&self) -> Bytes<'a> {
-        self.clone()
-    }
-}
-
-macro_rules! asbytes_from_impl {
-    ($t:ty) => {
-        impl AsBytes for $t {
-            fn as_bytes(&self) -> Bytes<'_> {
-                Bytes::from(self)
-            }
-        }
-    };
-}
-
-asbytes_from_impl!(str);
-asbytes_from_impl!([u8]);

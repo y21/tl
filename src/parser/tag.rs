@@ -43,10 +43,29 @@ impl<'a> Attributes<'a> {
     }
 
     /// Checks whether a given string is in the class names list
-    pub fn is_class_member(&self, member: &str) -> bool {
+    pub fn is_class_member<B>(&self, member: B) -> bool
+    where
+        B: Into<Bytes<'a>>,
+    {
+        let member: Bytes = member.into();
+        let member = member.as_utf8_str();
         self.class.as_ref().map_or(false, |b| {
             b.as_utf8_str().split_whitespace().any(|x| x == member)
         })
+    }
+
+    /// Checks whether this attributes collection contains a given key
+    pub fn get_attribute<B>(&self, key: B) -> Option<Option<Bytes<'a>>>
+    where
+        B: Into<Bytes<'a>>,
+    {
+        let key: Bytes = key.into();
+
+        match key.raw() {
+            b"id" => self.id.clone().map(Some),
+            b"class" => self.class.clone().map(Some),
+            _ => self.raw.get(&key).cloned(),
+        }
     }
 }
 
@@ -82,8 +101,8 @@ impl<'a> HTMLTag<'a> {
     }
 
     /// Returns the name of this HTML tag
-    pub fn name(&self) -> &Bytes<'a> {
-        &self._name
+    pub fn name(&self) -> Bytes<'a> {
+        self._name.clone()
     }
 
     /// Returns attributes of this HTML tag
@@ -93,8 +112,8 @@ impl<'a> HTMLTag<'a> {
 
     /// Returns the contained markup
     /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
-    pub fn inner_html(&self) -> &Bytes<'a> {
-        &self._raw
+    pub fn inner_html(&self) -> Bytes<'a> {
+        self._raw.clone()
     }
 
     /// Returns the contained text of this element, excluding any markup
@@ -177,10 +196,10 @@ impl<'a> Node<'a> {
     }
 
     /// Returns the inner HTML of this node
-    pub fn inner_html(&self) -> &Bytes<'a> {
+    pub fn inner_html(&self) -> Bytes<'a> {
         match self {
-            Node::Comment(c) => c,
-            Node::Raw(r) => r,
+            Node::Comment(c) => c.clone(),
+            Node::Raw(r) => r.clone(),
             Node::Tag(t) => t.inner_html(),
         }
     }
