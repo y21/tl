@@ -58,7 +58,7 @@ fn main() {
 ## Benchmarks
 Results for parsing a ~320KB [HTML document](https://github.com/y21/rust-html-parser-benchmark/blob/80d24a260ab9377bc704aa0b12657539aeaa4777/data/wikipedia.html).
 Left and right numbers are lower/upper bounds of the confidence interval. The middle number is criterion's best estimate of time/throughput for each iteration.
-``` 
+```notrust
 tl
   time:   [705.44 us 706.45 us 707.47 us]
   thrpt:  [442.11 MiB/s 442.75 MiB/s 443.38 MiB/s]
