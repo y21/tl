@@ -184,6 +184,9 @@ fn fuzz() {
     // We don't need to assert anything here, just see that they finish
     parse("J\x00<", ParserOptions::default());
     parse("<!J", ParserOptions::default());
+
+    // Very deeply nested tags should not trigger a stack overflow
+    parse(&"<p>".repeat(10000), ParserOptions::default());
 }
 
 #[test]

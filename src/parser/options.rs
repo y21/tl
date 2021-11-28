@@ -11,11 +11,20 @@ mod flags {
 /// If you need to do HTML tag lookups by ID or class names, you can enable tracking.
 /// This will cache HTML nodes as they appear in the source code on the fly.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct ParserOptions(u8);
+pub struct ParserOptions {
+    flags: u8,
+    max_depth: usize,
+}
+
+// some reasonable default max depth
+const MAX_DEFAULT_DEPTH: usize = 256;
 
 impl Default for ParserOptions {
     fn default() -> Self {
-        Self(0)
+        Self {
+            flags: 0,
+            max_depth: MAX_DEFAULT_DEPTH,
+        }
     }
 }
 
@@ -30,22 +39,25 @@ impl ParserOptions {
         if flags > flags::HIGHEST * 2 - 1 {
             None
         } else {
-            Some(Self(flags))
+            Some(Self {
+                flags,
+                ..Default::default()
+            })
         }
     }
 
     /// Returns the raw flags of this bitset
     pub fn to_raw(&self) -> u8 {
-        self.0
+        self.flags
     }
 
     fn set_flag(&mut self, flag: u8) {
-        self.0 |= flag;
+        self.flags |= flag;
     }
 
     #[inline]
     fn has_flag(&self, flag: u8) -> bool {
-        self.0 & flag != 0
+        self.flags & flag != 0
     }
 
     /// Enables tracking of HTML Tag IDs and stores them in a lookup table.
@@ -76,12 +88,27 @@ impl ParserOptions {
         self.has_flag(flags::TRACK_CLASSES)
     }
 
+    /// Returns the maximum depth of the HTML parser
+    #[inline]
+    pub fn max_depth(&self) -> usize {
+        self.max_depth
+    }
+
+    /// Sets the maximum recursion depth this HTML parser is allowed to take
+    ///
+    /// By default, this is set to a reasonably small value to not blow up the stack.
+    #[inline]
+    pub fn set_max_depth(mut self, depth: usize) -> Self {
+        self.max_depth = depth;
+        self
+    }
+
     /// Returns whether the parser is tracking HTML Tag IDs or classes (previously enabled by a call to `track_ids()` or `track_classes()`).
     #[inline]
     pub fn is_tracking(&self) -> bool {
         // for now we can just check if any bit is set, may or may not lead to better codegen than two cmps
         // this must be changed in some way if we ever add more flags
         // self.is_tracking_ids() || self.is_tracking_classes()
-        self.0 > 0
+        self.flags > 0
     }
 }

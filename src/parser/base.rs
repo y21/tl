@@ -34,6 +34,10 @@ pub enum HTMLVersion {
 /// Instead, users must call `tl::parse()` and use the returned `VDom`.
 #[derive(Debug)]
 pub struct Parser<'a> {
+    /// Recursion depth for parsing tags
+    ///
+    /// We keep track of recursion depth manually to avoid blowing up the stack.
+    pub(crate) depth: usize,
     /// Specified options for this HTML parser
     pub(crate) options: ParserOptions,
     /// A global collection of all HTML tags that appear in the source code
@@ -62,6 +66,7 @@ impl<'a> Parser<'a> {
             ids: HashMap::new(),
             classes: HashMap::new(),
             version: None,
+            depth: 0,
         }
     }
 
@@ -328,7 +333,15 @@ impl<'a> Parser<'a> {
         let ch = self.stream.current_cpy()?;
 
         if ch == constants::OPENING_TAG {
-            if let Some(handle) = self.parse_tag(true) {
+            // If we've reached maximum recursion depth, we stop here and don't call parse_tag as
+            // it would blow up the stack.
+            // Instead, return None
+            if self.depth > self.options.max_depth() {
+                return None;
+            }
+            self.depth += 1;
+
+            let node = if let Some(handle) = self.parse_tag(true) {
                 let tag_id = handle.get_inner();
 
                 if self.options.is_tracking() {
@@ -351,7 +364,10 @@ impl<'a> Parser<'a> {
             } else {
                 self.stream.advance();
                 None
-            }
+            };
+
+            self.depth -= 1;
+            node
         } else {
             let node = Node::Raw(self.read_to(b'<').into());
             Some(self.register_tag(node))
