@@ -13,4 +13,7 @@ keywords = ["html", "parser"]
 categories = ["parser-implementations", "parsing"]
 exclude = [".github/*"]
 
+[features]
+simd = []
+
 [dependencies]

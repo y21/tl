@@ -167,7 +167,6 @@ pub struct VDomGuard<'a> {
     _phantom: PhantomData<&'a str>,
 }
 
-// SAFETY: The string is leaked and pinned to a memory location
 unsafe impl<'a> Send for VDomGuard<'a> {}
 unsafe impl<'a> Sync for VDomGuard<'a> {}
 

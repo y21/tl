@@ -82,19 +82,16 @@ impl<'a> Parser<'a> {
 
     fn read_to(&mut self, terminator: u8) -> &'a [u8] {
         let start = self.stream.idx;
+        let bytes = unsafe { self.stream.data().get_unchecked(start..) };
 
-        while !self.stream.is_eof() {
-            // SAFETY: no bound check necessary because it's checked in the condition
-            let ch = unsafe { self.stream.current_cpy_unchecked() };
+        #[cfg(feature = "simd")]
+        let end = util::find_fast(bytes, terminator).unwrap_or_else(|| self.stream.len() - start);
 
-            if terminator == ch {
-                return unsafe { self.stream.slice_unchecked(start, self.stream.idx) };
-            }
+        #[cfg(not(feature = "simd"))]
+        let end = util::find_slow(bytes, terminator).unwrap_or_else(|| self.stream.len() - start);
 
-            self.stream.advance();
-        }
-
-        self.stream.slice(start, self.stream.idx)
+        self.stream.idx += end;
+        unsafe { self.stream.slice_unchecked(start, start + end) }
     }
 
     fn read_while(&mut self, terminator: &[u8]) {
