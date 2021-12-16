@@ -189,6 +189,28 @@ fn fuzz() {
     parse(&"<p>".repeat(10000), ParserOptions::default());
 }
 
+#[cfg(feature = "simd")]
+mod simd {
+    use crate::util;
+
+    #[test]
+    fn string_search() {
+        assert_eq!(util::find_fast(b"a", b' '), None);
+        assert_eq!(util::find_fast(b"", b' '), None);
+        assert_eq!(util::find_fast(b"a ", b' '), Some(1));
+        assert_eq!(util::find_fast(b"abcd ", b' '), Some(4));
+        assert_eq!(util::find_fast(b"ab cd ", b' '), Some(2));
+        assert_eq!(util::find_fast(b"abcdefgh ", b' '), Some(8));
+        assert_eq!(util::find_fast(b"abcdefghi ", b' '), Some(9));
+        assert_eq!(util::find_fast(b"abcdefghi", b' '), None);
+        assert_eq!(util::find_fast(b"abcdefghiabcdefghi .", b' '), Some(18));
+        assert_eq!(util::find_fast(b"abcdefghiabcdefghi.", b' '), None);
+
+        let long = "a".repeat(100000) + "b";
+        assert_eq!(util::find_fast(long.as_bytes(), b'b'), Some(100000));
+    }
+}
+
 #[test]
 fn query_selector_simple() {
     let input = "<div><p class=\"hi\">hello</p></div>";

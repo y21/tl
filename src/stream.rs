@@ -53,6 +53,18 @@ impl<'a, T> Stream<'a, T> {
         Self { data, idx: 0 }
     }
 
+    /// Returns the length
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Returns a reference to the underlying slice
+    #[inline]
+    pub fn data(&self) -> &[T] {
+        &self.data
+    }
+
     /// Returns the next element
     pub fn next(&mut self) -> Option<&T> {
         self.data.get(self.idx + 1).map(|c| {
