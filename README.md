@@ -1,7 +1,8 @@
 # tl
-tl is a very fast, zero-copy HTML parser written in pure Rust. <br />
+tl is a fast HTML parser written in pure Rust. <br />
 
 - [Usage](#usage)
+- [SIMD-accelerated parsing](#simd-accelerated-parsing)
 - [Benchmarks](#benchmarks)
 - [Design](#design)
 
@@ -9,7 +10,9 @@ tl is a very fast, zero-copy HTML parser written in pure Rust. <br />
 Add `tl` to your dependencies.
 ```toml
 [dependencies]
-tl = "0.4.2"
+tl = "0.4.3"
+# or, if you need SIMD
+tl = { version = "0.4.3", features = ["simd"] }
 ```
 
 The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting AST, although in the future this will likely be customizable, in case you need explicit error checking.
@@ -55,39 +58,42 @@ fn main() {
 }
 ```
 
+## SIMD-accelerated parsing
+This crate has optimized parsing functions which make use of SIMD. These are disabled by default and must be enabled explicitly by passing the `simd` feature flag due to the unstable feature `portable_simd`. This requires a **nightly** compiler!
+
 ## Benchmarks
 Results for parsing a ~320KB [HTML document](https://github.com/y21/rust-html-parser-benchmark/blob/80d24a260ab9377bc704aa0b12657539aeaa4777/data/wikipedia.html).
 Left and right numbers are lower/upper bounds of the confidence interval. The middle number is criterion's best estimate of time/throughput for each iteration.
 ```notrust
-tl
-  time:   [705.44 us 706.45 us 707.47 us]
-  thrpt:  [442.11 MiB/s 442.75 MiB/s 443.38 MiB/s]
+tl + simd
+  time:   [627.03 us 628.23 us 629.48 us]
+  thrpt:  [496.88 MiB/s 497.87 MiB/s 498.83 MiB/s]
 
 html5ever
-  time:   [5.7573 ms 5.7645 ms 5.7717 ms]
-  thrpt:  [54.192 MiB/s 54.260 MiB/s 54.327 MiB/s]
+  time:   [5.7817 ms 5.7900 ms 5.7985 ms]
+  thrpt:  [53.942 MiB/s 54.021 MiB/s 54.098 MiB/s]
   
 htmlparser
-  time:   [18.131 ms 18.155 ms 18.179 ms]
-  thrpt:  [17.206 MiB/s 17.228 MiB/s 17.251 MiB/s]
+  time:   [17.738 ms 17.764 ms 17.790 ms]
+  thrpt:  [17.582 MiB/s 17.608 MiB/s 17.634 MiB/s]
   
 rphtml
-  time:   [6.0143 ms 6.0223 ms 6.0305 ms]
-  thrpt:  [51.867 MiB/s 51.937 MiB/s 52.006 MiB/s]
+  time:   [6.0053 ms 6.0154 ms 6.0256 ms]
+  thrpt:  [51.909 MiB/s 51.997 MiB/s 52.084 MiB/s]
   
 rusthtml
-  time:   [3.3389 ms 3.3433 ms 3.3477 ms]
-  thrpt:  [93.433 MiB/s 93.556 MiB/s 93.676 MiB/s]
+  time:   [3.3830 ms 3.3881 ms 3.3933 ms]
+  thrpt:  [92.175 MiB/s 92.317 MiB/s 92.455 MiB/s]
   
 htmlstream
-  time:   [2.0316 ms 2.0344 ms 2.0372 ms]
-  thrpt:  [153.54 MiB/s 153.75 MiB/s 153.96 MiB/s]
+  time:   [2.2752 ms 2.2786 ms 2.2822 ms]
+  thrpt:  [137.05 MiB/s 137.27 MiB/s 137.48 MiB/s]
 ```
 
-[Source](https://github.com/y21/rust-html-parser-benchmark/tree/80d24a260ab9377bc704aa0b12657539aeaa4777) (file: wikipedia.html)
+[Source](https://github.com/y21/rust-html-parser-benchmark/tree/53238f68bbb57adc8dffdd245693ca1caa89cf4f) (file: wikipedia.html)
 
 ## Design
-Due to the zero-copy nature of parsers, the string must be kept alive for the entire lifetime of the parser/dom.
+Due to the nature of zero-copy parsers, the string must be kept alive for the entire lifetime of the parser/dom.
 If this is not acceptable or simply not possible in your case, you can call `tl::parse_owned()`.
-This goes through the same steps as `tl::parse()` but returns an `OwnedVDom` instead of a `VDom`.
-The difference is that `OwnedVDom` carefully creates a self-referential struct in which it stores the input string, so you can keep the `OwnedVDom` as long as you want and move it around as much as you want.
+This goes through the same steps as `tl::parse()` but returns an `VDomGuard` instead of a `VDom`.
+The difference is that `VDomGuard` carefully creates a self-referential struct in which it stores the input string, so you can keep the `VDomGuard` as long as you want and move it around as much as you want.

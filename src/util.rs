@@ -36,7 +36,7 @@ pub fn find_fast(haystack: &[u8], needle: u8) -> Option<usize> {
 
         let bytes = u8x16::from_array(bytes);
         let eq = bytes.lanes_eq(needle16).to_int();
-        let num = unsafe { std::mem::transmute::<_, u128>(eq) };
+        let num = unsafe { std::mem::transmute::<Simd<i8, 16>, u128>(eq) };
         if num != 0 {
             return Some(i + (num.trailing_zeros() >> 3) as usize);
         }

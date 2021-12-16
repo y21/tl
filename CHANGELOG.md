@@ -1,3 +1,9 @@
+# 0.4.3
+- Add optional `simd` feature flag for SIMD-accelerated parsing
+
+# 0.4.2
+- Keep track of recursion depth when parsing to avoid overflowing the stack
+
 # 0.4.1
 - Fixed an infinite loop bug in `parse_single` and a panic that occurs when trying to parse incomplete markup tags (`<!`)
 

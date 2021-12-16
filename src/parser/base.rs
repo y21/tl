@@ -77,29 +77,29 @@ impl<'a> Parser<'a> {
     }
 
     fn skip_whitespaces(&mut self) {
-        self.read_while(&[b' ', b'\n']);
+        self.read_while2(b' ', b'\n');
     }
 
-    fn read_to(&mut self, terminator: u8) -> &'a [u8] {
+    fn read_to(&mut self, needle: u8) -> &'a [u8] {
         let start = self.stream.idx;
         let bytes = unsafe { self.stream.data().get_unchecked(start..) };
 
         #[cfg(feature = "simd")]
-        let end = util::find_fast(bytes, terminator).unwrap_or_else(|| self.stream.len() - start);
+        let end = util::find_fast(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
 
         #[cfg(not(feature = "simd"))]
-        let end = util::find_slow(bytes, terminator).unwrap_or_else(|| self.stream.len() - start);
+        let end = util::find_slow(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         unsafe { self.stream.slice_unchecked(start, start + end) }
     }
 
-    fn read_while(&mut self, terminator: &[u8]) {
+    fn read_while2(&mut self, needle1: u8, needle2: u8) {
         while !self.stream.is_eof() {
             // SAFETY: no bound check necessary because it's checked in the condition
             let ch = unsafe { self.stream.current_unchecked() };
 
-            if !terminator.contains(ch) {
+            if *ch != needle1 && *ch != needle2 {
                 break;
             }
 
