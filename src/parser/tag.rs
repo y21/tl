@@ -43,28 +43,39 @@ impl<'a> Attributes<'a> {
     }
 
     /// Checks whether a given string is in the class names list
-    pub fn is_class_member<B>(&self, member: B) -> bool
-    where
-        B: Into<Bytes<'a>>,
-    {
-        let member: Bytes = member.into();
-        let member = member.as_utf8_str();
+    pub fn is_class_member<B: AsRef<[u8]>>(&self, member: B) -> bool {
         self.class.as_ref().map_or(false, |b| {
-            b.as_utf8_str().split_whitespace().any(|x| x == member)
+            b.as_utf8_str()
+                .split_whitespace()
+                .any(|x| x.as_bytes() == member.as_ref())
         })
     }
 
-    /// Checks whether this attributes collection contains a given key
+    /// Checks whether this attributes collection contains a given key and returns its value
     pub fn get_attribute<B>(&self, key: B) -> Option<Option<Bytes<'a>>>
     where
         B: Into<Bytes<'a>>,
     {
         let key: Bytes = key.into();
 
-        match key.raw() {
+        match key.as_bytes() {
             b"id" => self.id.clone().map(Some),
             b"class" => self.class.clone().map(Some),
             _ => self.raw.get(&key).cloned(),
+        }
+    }
+
+    /// Checks whether this attributes collection contains a given key and returns its value
+    pub fn get_attribute_mut<B>(&mut self, key: B) -> Option<Option<&mut Bytes<'a>>>
+    where
+        B: Into<Bytes<'a>>,
+    {
+        let key: Bytes = key.into();
+
+        match key.as_bytes() {
+            b"id" => self.id.as_mut().map(Some),
+            b"class" => self.class.as_mut().map(Some),
+            _ => self.raw.get_mut(&key).map(Option::as_mut),
         }
     }
 }
@@ -105,9 +116,19 @@ impl<'a> HTMLTag<'a> {
         self._name.clone()
     }
 
+    /// Returns a mutable reference to the name of this HTML tag
+    pub fn name_mut(&mut self) -> &mut Bytes<'a> {
+        &mut self._name
+    }
+
     /// Returns attributes of this HTML tag
     pub fn attributes(&self) -> &Attributes<'a> {
         &self._attributes
+    }
+
+    /// Returns a mutable reference to the attributes of this HTML tag
+    pub fn attributes_mut(&mut self) -> &mut Attributes<'a> {
+        &mut self._attributes
     }
 
     /// Returns the contained markup
@@ -120,7 +141,7 @@ impl<'a> HTMLTag<'a> {
     /// Equivalent to [Element#innerText](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerText) in browsers)
     /// This function may not allocate memory for a new string as it can just return the part of the tag that doesn't have markup
     /// For tags that *do* have more than one subnode, this will allocate memory
-    pub fn inner_text(&self, parser: &Parser<'a>) -> Cow<'a, str> {
+    pub fn inner_text<'p>(&self, parser: &'p Parser<'a>) -> Cow<'p, str> {
         let len = self._children.len();
 
         if len == 0 {
@@ -187,7 +208,7 @@ pub enum Node<'a> {
 
 impl<'a> Node<'a> {
     /// Returns the inner text of this node
-    pub fn inner_text(&self, parser: &Parser<'a>) -> Cow<'a, str> {
+    pub fn inner_text<'s, 'p: 's>(&'s self, parser: &'p Parser<'a>) -> Cow<'s, str> {
         match self {
             Node::Comment(_) => Cow::Borrowed(""),
             Node::Raw(r) => r.as_utf8_str(),
@@ -245,8 +266,24 @@ impl<'a> Node<'a> {
         }
     }
 
+    /// Tries to coerce this node into a `HTMLTag` variant
+    pub fn as_tag_mut(&mut self) -> Option<&mut HTMLTag<'a>> {
+        match self {
+            Self::Tag(tag) => Some(tag),
+            _ => None,
+        }
+    }
+
     /// Tries to coerce this node into a comment, returning the text
     pub fn as_comment(&self) -> Option<&Bytes<'a>> {
+        match self {
+            Self::Comment(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// Tries to coerce this node into a comment, returning the text
+    pub fn as_comment_mut(&mut self) -> Option<&mut Bytes<'a>> {
         match self {
             Self::Comment(c) => Some(c),
             _ => None,
@@ -256,7 +293,7 @@ impl<'a> Node<'a> {
     /// Tries to coerce this node into a raw text node, returning the text
     ///
     /// "Raw text nodes" are nodes that are not HTML tags, but just text
-    pub fn as_raw(&self) -> Option<&Bytes<'a>> {
+    pub fn as_raw_mut(&mut self) -> Option<&mut Bytes<'a>> {
         match self {
             Self::Raw(r) => Some(r),
             _ => None,

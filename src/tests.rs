@@ -186,11 +186,48 @@ fn fuzz() {
     parse("<!J", ParserOptions::default());
 
     // Very deeply nested tags should not trigger a stack overflow
-    parse(&"<p>".repeat(10000), ParserOptions::default());
+
+    // Miri is too slow... :(
+    let count = if cfg!(miri) { 100usize } else { 10000usize };
+
+    parse(&"<p>".repeat(count), ParserOptions::default());
+}
+
+#[test]
+fn query_selector_simple() {
+    let input = "<div><p class=\"hi\">hello</p></div>";
+    let dom = parse(input, ParserOptions::default());
+    let parser = dom.parser();
+    let mut selector = dom.query_selector(".hi").unwrap();
+    let el = force_as_tag(selector.next().and_then(|x| x.get(parser)).unwrap());
+
+    assert_eq!(dom.nodes().len(), 3);
+    assert_eq!(el.inner_text(parser), "hello");
+}
+
+#[test]
+fn mutate_dom() {
+    let input = r#"<img src="test.png" />"#;
+    let mut dom = parse(input, ParserOptions::default());
+
+    let mut selector = dom.query_selector("[src]").unwrap();
+    let handle = selector.next().unwrap();
+
+    let parser = dom.parser_mut();
+
+    let el = handle.get_mut(parser).unwrap();
+    let tag = el.as_tag_mut().unwrap();
+    let attr = tag.attributes_mut();
+    let bytes = attr.get_attribute_mut("src").flatten().unwrap();
+    bytes.set("world.png".as_bytes()).unwrap();
+
+    assert_eq!(attr.get_attribute("src"), Some(Some("world.png".into())));
 }
 
 #[cfg(feature = "simd")]
 mod simd {
+    // These tests make sure that SIMD functions do the right thing
+
     use crate::util;
 
     #[test]
@@ -206,19 +243,79 @@ mod simd {
         assert_eq!(util::find_fast(b"abcdefghiabcdefghi .", b' '), Some(18));
         assert_eq!(util::find_fast(b"abcdefghiabcdefghi.", b' '), None);
 
-        let long = "a".repeat(100000) + "b";
+        let count = if cfg!(miri) { 500usize } else { 1000usize };
+
+        let long = "a".repeat(count) + "b";
         assert_eq!(util::find_fast(long.as_bytes(), b'b'), Some(100000));
     }
 }
 
-#[test]
-fn query_selector_simple() {
-    let input = "<div><p class=\"hi\">hello</p></div>";
-    let dom = parse(input, ParserOptions::default());
-    let parser = dom.parser();
-    let mut selector = dom.query_selector(".hi").unwrap();
-    let el = force_as_tag(selector.next().and_then(|x| x.get(parser)).unwrap());
+mod bytes {
+    use crate::bytes::*;
 
-    assert_eq!(dom.nodes().len(), 3);
-    assert_eq!(el.inner_text(parser), "hello");
+    #[test]
+    fn from_str() {
+        let x = Bytes::from("hello");
+        assert_eq!(x.as_bytes(), b"hello");
+    }
+
+    #[test]
+    fn from_bytes() {
+        let x = Bytes::from(b"hello" as &[u8]);
+        assert_eq!(x.as_bytes(), b"hello");
+    }
+
+    #[test]
+    fn as_bytes_borrowed() {
+        let xb = Bytes::from(b"hello" as &[u8]);
+        assert_eq!(xb.as_bytes_borrowed(), Some(b"hello" as &[u8]));
+
+        let mut xc = xb.clone();
+        xc.set(b"test2" as &[u8]).unwrap();
+        assert_eq!(xc.as_bytes_borrowed(), None);
+    }
+
+    #[test]
+    fn as_utf8_str() {
+        assert_eq!(Bytes::from("hello").as_utf8_str(), "hello");
+    }
+
+    #[test]
+    fn clone_shallow() {
+        // cloning a borrowed slice does not deep-clone
+        let x = Bytes::from("hello");
+        let xp = x.as_ptr();
+
+        let y = x.clone();
+        let yp = y.as_ptr();
+
+        assert_eq!(xp, yp);
+    }
+
+    #[test]
+    fn set() {
+        let mut x = Bytes::from("hello");
+        let xp = x.as_ptr();
+
+        x.set(b"world" as &[u8]).unwrap();
+        let xp2 = x.as_ptr();
+
+        // check that the changes are reflected
+        assert_eq!(x.as_bytes(), b"world");
+
+        // pointer must be different now as the call to `set` should cause an allocation
+        assert_ne!(xp, xp2);
+    }
+
+    #[test]
+    fn clone_deep() {
+        let x = Bytes::from("hello");
+        let xp = x.as_ptr();
+
+        let mut y = x.clone();
+        y.set(b"world" as &[u8]).unwrap();
+        let yp = y.as_ptr();
+
+        assert_ne!(xp, yp);
+    }
 }

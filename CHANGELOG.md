@@ -1,3 +1,7 @@
+# 0.5.0
+- Allow DOM mutation
+- Allow `Bytes` to store owned data
+
 # 0.4.3
 - Add optional `simd` feature flag for SIMD-accelerated parsing
 

@@ -32,6 +32,12 @@ impl<'a> VDom<'a> {
         &self.parser
     }
 
+    /// Returns a mutable reference to the underlying parser
+    #[inline]
+    pub fn parser_mut(&mut self) -> &mut Parser<'a> {
+        &mut self.parser
+    }
+
     /// Finds an element by its `id` attribute.
     pub fn get_element_by_id<'b, S>(&'b self, id: S) -> Option<NodeHandle>
     where
@@ -56,24 +62,21 @@ impl<'a> VDom<'a> {
     }
 
     /// Returns a list of elements that match a given class name.
-    pub fn get_elements_by_class_name<'b, S>(
+    pub fn get_elements_by_class_name<'b>(
         &'b self,
-        id: S,
-    ) -> Box<dyn Iterator<Item = NodeHandle> + '_>
-    where
-        S: Into<Bytes<'a>>,
-    {
-        let bytes: Bytes = id.into();
+        id: &'b str,
+    ) -> Box<dyn Iterator<Item = NodeHandle> + 'b> {
         let parser = self.parser();
 
         if parser.options.is_tracking_classes() {
             parser
                 .classes
-                .get(&bytes)
+                .get(&Bytes::from(id.as_bytes()))
                 .map(|x| Box::new(x.iter().cloned()) as Box<dyn Iterator<Item = NodeHandle>>)
                 .unwrap_or_else(|| Box::new(std::iter::empty()))
         } else {
-            let member = bytes.as_utf8_str();
+            let member = id;
+
             let iter = self
                 .nodes()
                 .iter()
@@ -81,7 +84,7 @@ impl<'a> VDom<'a> {
                 .filter_map(move |(id, node)| {
                     node.as_tag().and_then(|tag| {
                         tag._attributes
-                            .is_class_member(member.as_ref())
+                            .is_class_member(member)
                             .then(|| NodeHandle::new(id as InnerNodeHandle))
                     })
                 });
@@ -134,7 +137,7 @@ impl<'a> VDom<'a> {
         None
     }
 
-    /// Returns an iterator over elements that match the given query selector.
+    /// Tries to parse the query selector and returns an iterator over elements that match the given query selector.
     ///
     /// # Example
     /// ```

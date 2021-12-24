@@ -373,7 +373,8 @@ impl<'a> Parser<'a> {
 
     #[inline(never)]
     fn process_class(&mut self, class: &Bytes<'a>, element: NodeHandle) {
-        let raw = class.raw();
+        // TODO(y21): check if unwrap_unchecked makes a difference
+        let raw = class.as_bytes_borrowed().unwrap();
 
         let mut stream = Stream::new(raw);
 
@@ -411,6 +412,12 @@ impl<'a> Parser<'a> {
     #[inline]
     pub fn resolve_node_id(&self, id: InnerNodeHandle) -> Option<&Node<'a>> {
         self.tags.get(id)
+    }
+
+    /// Resolves an internal Node ID obtained from a NodeHandle to a mutable Node
+    #[inline]
+    pub fn resolve_node_id_mut(&mut self, id: InnerNodeHandle) -> Option<&mut Node<'a>> {
+        self.tags.get_mut(id)
     }
 
     pub(crate) fn parse(mut self) -> Parser<'a> {

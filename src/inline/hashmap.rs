@@ -46,6 +46,12 @@ where
         self.0.get(key)
     }
 
+    /// Returns a mutable reference to the value corresponding to the key.
+    #[inline]
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        self.0.get_mut(key)
+    }
+
     /// Returns a reference to the value corresponding to the key.
     #[inline]
     pub fn contains_key(&self, key: &K) -> bool {
@@ -157,6 +163,17 @@ impl<K: Eq + Hash, V, const N: usize> InlineHashMapInner<K, V, N> {
         }
     }
 
+    pub fn get_mut<'m>(&'m mut self, k: &K) -> Option<&'m mut V> {
+        match self {
+            Self::Inline { data, len } => unsafe {
+                InlineHashMapIteratorMut::new(data, *len)
+                    .find(|(key, _)| key.eq(k))
+                    .map(|(_, value)| value)
+            },
+            Self::Heap(map) => map.get_mut(k),
+        }
+    }
+
     pub fn insert(&mut self, k: K, v: V) {
         let (array, len) = match self {
             Self::Inline { data, len } => (data, len),
@@ -194,6 +211,34 @@ impl<K: Eq + Hash, V, const N: usize> InlineHashMapInner<K, V, N> {
             },
             Self::Heap(map) => map.contains_key(k),
         }
+    }
+}
+
+/// An iterator over the inline array elements of an `InlineHashMap`.
+pub struct InlineHashMapIteratorMut<'a, K, V> {
+    array: &'a mut [MaybeUninit<(K, V)>],
+    idx: usize,
+    len: usize,
+}
+
+impl<'a, K, V> InlineHashMapIteratorMut<'a, K, V> {
+    pub(crate) unsafe fn new(array: &'a mut [MaybeUninit<(K, V)>], len: usize) -> Self {
+        Self { array, idx: 0, len }
+    }
+}
+
+impl<'a, K, V> Iterator for InlineHashMapIteratorMut<'a, K, V> {
+    type Item = &'a mut (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.len {
+            return None;
+        }
+
+        let element = unsafe { &mut *self.array[self.idx].as_mut_ptr() };
+        self.idx += 1;
+
+        Some(element)
     }
 }
 

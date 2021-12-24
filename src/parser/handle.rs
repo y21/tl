@@ -21,9 +21,14 @@ impl NodeHandle {
         NodeHandle(node)
     }
 
-    /// Returns the node that is associated to this specific handle
+    /// Returns a reference to the node that is associated to this specific handle
     pub fn get<'p, 'buf>(&self, parser: &'p Parser<'buf>) -> Option<&'p Node<'buf>> {
         parser.resolve_node_id(self.0)
+    }
+
+    /// Returns a mutable reference to the node that is associated to this specific handle
+    pub fn get_mut<'p, 'buf>(&self, parser: &'p mut Parser<'buf>) -> Option<&'p mut Node<'buf>> {
+        parser.resolve_node_id_mut(self.0)
     }
 
     /// Returns the internal unique Node ID that maps to a specific node in the node table
