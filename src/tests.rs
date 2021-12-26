@@ -209,6 +209,30 @@ mod simd {
         let long = "a".repeat(100000) + "b";
         assert_eq!(util::find_fast(long.as_bytes(), b'b'), Some(100000));
     }
+
+    #[test]
+    fn string_search_4() {
+        const NEEDLE: [u8; 4] = [b'a', b'b', b'c', b'd'];
+
+        assert_eq!(util::find_fast_4(b"e", NEEDLE), None);
+        assert_eq!(util::find_fast_4(b"a", NEEDLE), Some(0));
+        assert_eq!(util::find_fast_4(b"ea", NEEDLE), Some(1));
+        assert_eq!(util::find_fast_4(b"ef", NEEDLE), None);
+        assert_eq!(util::find_fast_4(b"ef a", NEEDLE), Some(3));
+        assert_eq!(util::find_fast_4(b"ef g", NEEDLE), None);
+        assert_eq!(util::find_fast_4(b"ef ghijk", NEEDLE), None);
+        assert_eq!(util::find_fast_4(b"ef ghijkl", NEEDLE), None);
+        assert_eq!(util::find_fast_4(b"ef ghijkla", NEEDLE), Some(9));
+        assert_eq!(util::find_fast_4(b"ef ghiajklm", NEEDLE), Some(6));
+        assert_eq!(util::find_fast_4(b"ef ghibjklm", NEEDLE), Some(6));
+        assert_eq!(util::find_fast_4(b"ef ghicjklm", NEEDLE), Some(6));
+        assert_eq!(util::find_fast_4(b"ef ghidjklm", NEEDLE), Some(6));
+        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstua", NEEDLE), Some(18));
+        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstub", NEEDLE), Some(18));
+        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstuc", NEEDLE), Some(18));
+        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstud", NEEDLE), Some(18));
+        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstu", NEEDLE), None);
+    }
 }
 
 #[test]
