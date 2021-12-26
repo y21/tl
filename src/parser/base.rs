@@ -94,6 +94,20 @@ impl<'a> Parser<'a> {
         unsafe { self.stream.slice_unchecked(start, start + end) }
     }
 
+    fn read_to4(&mut self, needle: [u8; 4]) -> &'a [u8] {
+        let start = self.stream.idx;
+        let bytes = unsafe { self.stream.data().get_unchecked(start..) };
+
+        #[cfg(feature = "simd")]
+        let end = util::find_fast_4(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
+
+        #[cfg(not(feature = "simd"))]
+        let end = util::find_multi_slow(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
+
+        self.stream.idx += end;
+        unsafe { self.stream.slice_unchecked(start, start + end) }
+    }
+
     fn read_while2(&mut self, needle1: u8, needle2: u8) {
         while !self.stream.is_eof() {
             // SAFETY: no bound check necessary because it's checked in the condition
@@ -160,9 +174,12 @@ impl<'a> Parser<'a> {
         }
 
         self.skip_whitespaces();
-        let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\''])?;
 
-        let value = self.read_to(quote);
+        let value = if let Some(quote) = self.stream.expect_oneof_and_skip(&[b'"', b'\'']) {
+            self.read_to(quote)
+        } else {
+            self.read_to4([b' ', b'\n', b'/', b'>'])
+        };
 
         Some((name, Some(value)))
     }
@@ -186,15 +203,17 @@ impl<'a> Parser<'a> {
                 let v: Option<Bytes<'a>> = v.map(Into::into);
 
                 if k.eq(constants::ID_ATTR) {
-                    attributes.id = v.clone();
+                    attributes.id = v;
                 } else if k.eq(constants::CLASS_ATTR) {
-                    attributes.class = v.clone();
+                    attributes.class = v;
+                } else {
+                    attributes.raw.insert(k.into(), v);
                 }
-
-                attributes.raw.insert(k.into(), v);
             }
 
-            self.stream.advance();
+            if !constants::SELF_CLOSING.contains(self.stream.current()?) {
+                self.stream.advance();
+            }
         }
 
         Some(attributes)
@@ -299,7 +318,7 @@ impl<'a> Parser<'a> {
                 .stream
                 .slice_checked(idx, idx + constants::END_OF_TAG.len());
 
-            if slice.eq(constants::END_OF_TAG) {
+            if slice.eq(&constants::END_OF_TAG) {
                 self.stream.advance_by(constants::END_OF_TAG.len());
                 self.read_ident()?;
 

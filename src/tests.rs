@@ -222,3 +222,35 @@ fn query_selector_simple() {
     assert_eq!(dom.nodes().len(), 3);
     assert_eq!(el.inner_text(parser), "hello");
 }
+
+#[test]
+fn valueless_attribute() {
+    // https://github.com/y21/tl/issues/11
+    let input = r#"
+        <a id="u54423">
+            <iframe allowfullscreen></iframe>
+        </a>
+    "#;
+
+    let dom = parse(input, ParserOptions::default());
+    let element = dom.get_element_by_id("u54423");
+
+    assert!(element.is_some());
+}
+
+#[test]
+fn unquoted() {
+    // https://github.com/y21/tl/issues/12
+    let input = r#"
+        <a id=u54423>Hello World</a>
+    "#;
+
+    let dom = parse(input, ParserOptions::default());
+    let parser = dom.parser();
+    let element = dom.get_element_by_id("u54423");
+
+    assert_eq!(
+        element.and_then(|x| x.get(parser).map(|x| x.inner_text(parser))),
+        Some("Hello World".into())
+    );
+}
