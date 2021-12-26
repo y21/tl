@@ -1,3 +1,7 @@
+# 0.4.4
+- Parse unquoted attribute values properly (`<a href=foo>`) [#12]
+- Parse valueless attributes properly (`<iframe allowfullscreen>`) [#11]
+
 # 0.4.3
 - Add optional `simd` feature flag for SIMD-accelerated parsing
 

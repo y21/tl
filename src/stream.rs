@@ -41,8 +41,9 @@ impl<'a, T: Eq + Copy> Stream<'a, T> {
     }
 
     /// Same as expect_and_skip, but returns a bool
+    #[inline]
     pub fn expect_and_skip_cond(&mut self, expect: T) -> bool {
-        self.expect_and_skip(expect).map_or(false, |c| c == expect)
+        self.expect_and_skip(expect).is_some()
     }
 }
 
@@ -65,7 +66,7 @@ impl<'a, T> Stream<'a, T> {
         &self.data
     }
 
-    /// Returns the next element
+    /// Increments the index and returns the next element
     pub fn next(&mut self) -> Option<&T> {
         self.data.get(self.idx + 1).map(|c| {
             self.advance();
@@ -83,13 +84,13 @@ impl<'a, T> Stream<'a, T> {
         self.idx += step;
     }
 
-    /// Returns the current element, but panicks if out of bounds
+    /// Returns the current element
     #[inline]
     pub fn current(&self) -> Option<&T> {
         self.data.get(self.idx)
     }
 
-    /// Returns the current element, but panicks if out of bounds
+    /// Returns the current element without doing any boundary checks
     #[inline]
     pub unsafe fn current_unchecked(&self) -> &T {
         &self.data.get_unchecked(self.idx)
@@ -107,7 +108,7 @@ impl<'a, T> Stream<'a, T> {
         &self.data[from..to]
     }
 
-    /// Returns a subslice of this stream, and panicks if out of bounds
+    /// Returns a subslice of this stream without doing any boundary checks
     #[inline]
     pub unsafe fn slice_unchecked(&self, from: usize, to: usize) -> &'a [T] {
         self.data.get_unchecked(from..to)
