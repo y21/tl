@@ -1,4 +1,8 @@
-on: [push, pull_request]
+on:
+  push:
+    branches: [main, staging, trying]
+  pull_request:
+    branches: [main]
 
 name: Test
 
@@ -14,10 +18,23 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: nightly
           override: true
+          components: miri
 
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
+
+      - name: Test SIMD
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --features simd
+
+      - name: Miri
+        uses: actions-rs/cargo@v1
+        with:
+          command: miri
+          args: test

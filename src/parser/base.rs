@@ -94,6 +94,20 @@ impl<'a> Parser<'a> {
         unsafe { self.stream.slice_unchecked(start, start + end) }
     }
 
+    fn read_to4(&mut self, needle: [u8; 4]) -> &'a [u8] {
+        let start = self.stream.idx;
+        let bytes = unsafe { self.stream.data().get_unchecked(start..) };
+
+        #[cfg(feature = "simd")]
+        let end = util::find_fast_4(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
+
+        #[cfg(not(feature = "simd"))]
+        let end = util::find_multi_slow(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
+
+        self.stream.idx += end;
+        unsafe { self.stream.slice_unchecked(start, start + end) }
+    }
+
     fn read_while2(&mut self, needle1: u8, needle2: u8) {
         while !self.stream.is_eof() {
             // SAFETY: no bound check necessary because it's checked in the condition
@@ -109,19 +123,16 @@ impl<'a> Parser<'a> {
 
     fn read_ident(&mut self) -> Option<&'a [u8]> {
         let start = self.stream.idx;
+        let bytes = unsafe { self.stream.data().get_unchecked(start..) };
 
-        while !self.stream.is_eof() {
-            // SAFETY: no bound check necessary because it's checked in the condition
-            let ch = unsafe { self.stream.current_cpy_unchecked() };
+        #[cfg(feature = "simd")]
+        let end = util::search_non_ident_fast(bytes)?;
 
-            if !util::is_ident(ch) {
-                return Some(unsafe { self.stream.slice_unchecked(start, self.stream.idx) });
-            }
+        #[cfg(not(feature = "simd"))]
+        let end = util::search_non_ident_slow(bytes)?;
 
-            self.stream.advance();
-        }
-
-        None
+        self.stream.idx += end;
+        Some(unsafe { self.stream.slice_unchecked(start, start + end) })
     }
 
     fn skip_comment(&mut self) -> Option<&'a [u8]> {
@@ -160,9 +171,12 @@ impl<'a> Parser<'a> {
         }
 
         self.skip_whitespaces();
-        let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\''])?;
 
-        let value = self.read_to(quote);
+        let value = if let Some(quote) = self.stream.expect_oneof_and_skip(&[b'"', b'\'']) {
+            self.read_to(quote)
+        } else {
+            self.read_to4([b' ', b'\n', b'/', b'>'])
+        };
 
         Some((name, Some(value)))
     }
@@ -179,22 +193,19 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            if let Some((k, v)) = self.parse_attribute() {
-                // `id` and `class` attributes need to be handled manually,
-                // as we're going to store them in a HashMap so `get_element_by_id` is O(1)
+            if let Some((key, value)) = self.parse_attribute() {
+                let value: Option<Bytes<'a>> = value.map(Into::into);
 
-                let v: Option<Bytes<'a>> = v.map(Into::into);
-
-                if k.eq(constants::ID_ATTR) {
-                    attributes.id = v.clone();
-                } else if k.eq(constants::CLASS_ATTR) {
-                    attributes.class = v.clone();
-                }
-
-                attributes.raw.insert(k.into(), v);
+                match key {
+                    b"id" => attributes.id = value,
+                    b"class" => attributes.class = value,
+                    _ => attributes.raw.insert(key.into(), value),
+                };
             }
 
-            self.stream.advance();
+            if !constants::SELF_CLOSING.contains(self.stream.current()?) {
+                self.stream.advance();
+            }
         }
 
         Some(attributes)
@@ -299,7 +310,7 @@ impl<'a> Parser<'a> {
                 .stream
                 .slice_checked(idx, idx + constants::END_OF_TAG.len());
 
-            if slice.eq(constants::END_OF_TAG) {
+            if slice.eq(&constants::END_OF_TAG) {
                 self.stream.advance_by(constants::END_OF_TAG.len());
                 self.read_ident()?;
 
