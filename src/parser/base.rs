@@ -123,19 +123,16 @@ impl<'a> Parser<'a> {
 
     fn read_ident(&mut self) -> Option<&'a [u8]> {
         let start = self.stream.idx;
+        let bytes = unsafe { self.stream.data().get_unchecked(start..) };
 
-        while !self.stream.is_eof() {
-            // SAFETY: no bound check necessary because it's checked in the condition
-            let ch = unsafe { self.stream.current_cpy_unchecked() };
+        #[cfg(feature = "simd")]
+        let end = util::search_non_ident_fast(bytes)?;
 
-            if !util::is_ident(ch) {
-                return Some(unsafe { self.stream.slice_unchecked(start, self.stream.idx) });
-            }
+        #[cfg(not(feature = "simd"))]
+        let end = util::search_non_ident_slow(bytes)?;
 
-            self.stream.advance();
-        }
-
-        None
+        self.stream.idx += end;
+        Some(unsafe { self.stream.slice_unchecked(start, start + end) })
     }
 
     fn skip_comment(&mut self) -> Option<&'a [u8]> {
@@ -196,19 +193,14 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            if let Some((k, v)) = self.parse_attribute() {
-                // `id` and `class` attributes need to be handled manually,
-                // as we're going to store them in a HashMap so `get_element_by_id` is O(1)
+            if let Some((key, value)) = self.parse_attribute() {
+                let value: Option<Bytes<'a>> = value.map(Into::into);
 
-                let v: Option<Bytes<'a>> = v.map(Into::into);
-
-                if k.eq(constants::ID_ATTR) {
-                    attributes.id = v;
-                } else if k.eq(constants::CLASS_ATTR) {
-                    attributes.class = v;
-                } else {
-                    attributes.raw.insert(k.into(), v);
-                }
+                match key {
+                    b"id" => attributes.id = value,
+                    b"class" => attributes.class = value,
+                    _ => attributes.raw.insert(key.into(), value),
+                };
             }
 
             if !constants::SELF_CLOSING.contains(self.stream.current()?) {
