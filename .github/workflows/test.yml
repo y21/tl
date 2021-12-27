@@ -30,4 +30,6 @@ jobs:
 
       - name: Miri
         uses: actions-rs/cargo@v1
-        run: cargo miri test
+        with:
+          command: miri
+          args: test
