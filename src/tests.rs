@@ -185,8 +185,10 @@ fn fuzz() {
     parse("J\x00<", ParserOptions::default());
     parse("<!J", ParserOptions::default());
 
-    // Very deeply nested tags should not trigger a stack overflow
-    parse(&"<p>".repeat(10000), ParserOptions::default());
+    // Miri is too slow... :(
+    let count = if cfg!(miri) { 100usize } else { 10000usize };
+
+    parse(&"<p>".repeat(count), ParserOptions::default());
 }
 
 #[cfg(feature = "simd")]
@@ -232,6 +234,21 @@ mod simd {
         assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstuc", NEEDLE), Some(18));
         assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstud", NEEDLE), Some(18));
         assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstu", NEEDLE), None);
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn search_non_ident() {
+        assert_eq!(util::search_non_ident_fast(b"this-is-a-very-long-identifier<"), Some(30));
+        assert_eq!(util::search_non_ident_fast(b"0123456789Abc_-<"), Some(15));
+        assert_eq!(util::search_non_ident_fast(b"0123456789Abc-<"), Some(14));
+        assert_eq!(util::search_non_ident_fast(b"0123456789Abcdef_-<"), Some(18));
+        assert_eq!(util::search_non_ident_fast(b""), None);
+        assert_eq!(util::search_non_ident_fast(b"short"), None);
+        assert_eq!(util::search_non_ident_fast(b"short_<"), Some(6));
+        assert_eq!(util::search_non_ident_fast(b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"), None);
+        assert_eq!(util::search_non_ident_fast(b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_<"), Some(64));
+        assert_eq!(util::search_non_ident_fast(b"0123456789ab<defghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_<"), Some(12));
     }
 }
 
