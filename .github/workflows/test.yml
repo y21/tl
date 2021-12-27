@@ -21,3 +21,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+
+      - name: Test SIMD
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --features simd
+
+      - name: Miri
+        uses: actions-rs/cargo@v1
+        run: cargo miri test
