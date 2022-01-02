@@ -330,6 +330,19 @@ mod bytes {
     }
 
     #[test]
+    fn clone_owned_deep() {
+        let mut x = Bytes::from("");
+        x.set(b"hello" as &[u8]).unwrap();
+        let xp = x.as_ptr();
+
+        let y = x.clone();
+        let yp = y.as_ptr();
+
+        assert_eq!(x, y);
+        assert_ne!(xp, yp);
+    }
+
+    #[test]
     fn set() {
         let mut x = Bytes::from("hello");
         let xp = x.as_ptr();

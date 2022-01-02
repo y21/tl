@@ -92,18 +92,9 @@ unsafe fn compact_bytes_to_slice<'a>(ptr: *const u8, l: u32) -> &'a [u8] {
     std::slice::from_raw_parts(ptr, l as usize)
 }
 
-/// Converts `Bytes` raw parts to a boxed slice
-#[inline]
-unsafe fn compact_bytes_to_boxed_slice(ptr: *mut u8, len: u32) -> Box<[u8]> {
-    let len = len as usize;
-
-    // carefully reconstruct a `Box<[u8]>` from the raw pointer and length
-    Vec::from_raw_parts(ptr, len, len).into_boxed_slice()
-}
-
 /// Converts a boxed byte slice to compact raw parts
 ///
-/// The caller is responsible for freeing the returned pointer
+/// The caller is responsible for freeing the returned pointer and that the length of the slice does not overflow a u32!
 unsafe fn boxed_slice_to_compact_parts(slice: Box<[u8]>) -> (*mut u8, u32) {
     // wrap box in `ManuallyDrop` so it's not dropped at the end of the scope
     let mut slice = ManuallyDrop::new(slice);
@@ -113,10 +104,11 @@ unsafe fn boxed_slice_to_compact_parts(slice: Box<[u8]>) -> (*mut u8, u32) {
     (ptr, len as u32)
 }
 
-/// Clones compact byte parts and returns the new parts
+/// Clones a slice given its raw parts and returns the new, cloned parts
 #[inline]
 unsafe fn clone_compact_bytes_parts(ptr: *mut u8, len: u32) -> (*mut u8, u32) {
-    boxed_slice_to_compact_parts(compact_bytes_to_boxed_slice(ptr, len).clone())
+    let slice = compact_bytes_to_slice(ptr, len).to_vec().into_boxed_slice();
+    boxed_slice_to_compact_parts(slice)
 }
 
 // Custom `Debug` trait is implemented which displays the data as a UTF8 string,
