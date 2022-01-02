@@ -244,7 +244,7 @@ mod simd {
         let count = if cfg!(miri) { 500usize } else { 1000usize };
 
         let long = "a".repeat(count) + "b";
-        assert_eq!(util::find_fast(long.as_bytes(), b'b'), Some(100000));
+        assert_eq!(util::find_fast(long.as_bytes(), b'b'), Some(count));
     }
 
     #[test]
