@@ -2,6 +2,7 @@
 tl is a fast HTML parser written in pure Rust. <br />
 
 - [Usage](#usage)
+- [Examples](#examples)
 - [SIMD-accelerated parsing](#simd-accelerated-parsing)
 - [Benchmarks](#benchmarks)
 - [Design](#design)
@@ -17,6 +18,7 @@ tl = { version = "0.5.0", features = ["simd"] }
 
 The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting AST, although in the future this will likely be customizable, in case you need explicit error checking.
 
+## Examples
 Finding an element by its id attribute and printing the inner text:
 ```rust
 fn main() {
@@ -55,6 +57,37 @@ fn main() {
         });
     
     println!("{:?}", img);
+}
+```
+
+Mutating the `href` attribute of an anchor tag:
+> In a real world scenario, you would want to handle errors properly instead of unwrapping.
+```rust
+fn main() {
+  let input = r#"<div><a href="/about">About</a></div>"#;
+  let mut dom = tl::parse(input, tl::ParserOptions::default())
+    .expect("HTML string too long");
+  
+  let anchor = dom.query_selector("a[href]")
+    .expect("Failed to parse query selector")
+    .next()
+    .expect("Failed to find anchor tag");
+
+  let parser_mut = dom.parser_mut();
+
+  let anchor = anchor.get_mut(parser_mut)
+    .expect("Failed to resolve node")
+    .as_tag_mut()
+    .expect("Failed to cast Node to HTMLTag");
+
+  let attributes = anchor.attributes_mut();
+
+  attributes.get_attribute_mut("href")
+    .flatten()
+    .expect("Attribute not found or malformed")
+    .set("http://localhost/about");
+
+  assert_eq!(attributes.get_attribute("href").flatten(), Some("http://localhost/about".into()));
 }
 ```
 
