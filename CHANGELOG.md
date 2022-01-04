@@ -1,6 +1,8 @@
 # 0.5.0
+**⚠ This release has breaking changes**
 - Allow DOM mutation
-- Allow `Bytes` to store owned data
+- Allow `Bytes` to store owned data through `Bytes::set()`
+- `tl::parse()` now returns `Result<VDom<'a>, ParseError>`
 
 # 0.4.4
 - Parse unquoted attribute values properly (`<a href=foo>`) [#12]

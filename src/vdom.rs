@@ -1,3 +1,4 @@
+use crate::errors::ParseError;
 use crate::parser::HTMLVersion;
 use crate::parser::NodeHandle;
 use crate::queryselector;
@@ -11,7 +12,7 @@ use std::marker::PhantomData;
 /// VDom represents a [Document Object Model](https://developer.mozilla.org/en/docs/Web/API/Document_Object_Model)
 ///
 /// It is the result of parsing an HTML document.
-/// Internally it is only a wrapper around the [`Parser`] struct, but you do not need to know much about the [`Parser`] struct except for that all of the HTML tags are stored in here.
+/// Internally it is only a wrapper around the [`Parser`] struct, in which all of the HTML tags are stored.
 /// Many functions of the public API take a reference to a [`Parser`] as a parameter to resolve [`NodeHandle`]s to [`Node`]s.
 #[derive(Debug)]
 pub struct VDom<'a> {
@@ -141,7 +142,7 @@ impl<'a> VDom<'a> {
     ///
     /// # Example
     /// ```
-    /// let dom = tl::parse("<div><p class=\"foo\">bar</div>", tl::ParserOptions::default());
+    /// let dom = tl::parse("<div><p class=\"foo\">bar</div>", tl::ParserOptions::default()).unwrap();
     /// let handle = dom.query_selector("p.foo").and_then(|mut iter| iter.next()).unwrap();
     /// let node = handle.get(dom.parser()).unwrap();
     /// assert_eq!(node.inner_text(dom.parser()), "bar");
@@ -162,10 +163,10 @@ impl<'a> VDom<'a> {
 /// The only way to construct this is by calling `parse_owned()`.
 #[derive(Debug)]
 pub struct VDomGuard<'a> {
-    /// Pointer to leaked input string
-    ptr: *mut str,
     /// Wrapped VDom instance
     dom: VDom<'a>,
+    /// The leaked input string that is referenced by self.dom
+    _s: RawString,
     /// PhantomData for self.dom
     _phantom: PhantomData<&'a str>,
 }
@@ -175,19 +176,28 @@ unsafe impl<'a> Sync for VDomGuard<'a> {}
 
 impl<'a> VDomGuard<'a> {
     /// Parses the input string
-    pub(crate) fn parse(input: String, options: ParserOptions) -> VDomGuard<'a> {
-        let ptr = Box::into_raw(input.into_boxed_str());
+    pub(crate) fn parse(
+        input: String,
+        options: ParserOptions,
+    ) -> Result<VDomGuard<'a>, ParseError> {
+        let input = RawString::new(input);
 
-        // SAFETY: Shortening the lifetime of the input string is fine, as it's `'static`
-        let input_extended: &'a str = unsafe { &*ptr };
+        let ptr = input.as_ptr();
 
-        let parser = Parser::new(input_extended, options).parse();
+        let input_ref: &'a str = unsafe { &*ptr };
 
-        Self {
-            ptr,
+        // Parsing will either:
+        // a) succeed, and we return a VDom instance
+        //    that, when dropped, will free the input string
+        // b) fail, and we return a ParseError
+        //    and `RawString`s destructor will run and deallocate the string properly
+        let parser = Parser::new(input_ref, options).parse()?;
+
+        Ok(Self {
+            _s: input,
             dom: VDom::from(parser),
             _phantom: PhantomData,
-        }
+        })
     }
 }
 
@@ -200,9 +210,24 @@ impl<'a> VDomGuard<'a> {
     }
 }
 
-impl<'a> Drop for VDomGuard<'a> {
+#[derive(Debug)]
+struct RawString(*mut str);
+
+impl RawString {
+    pub fn new(s: String) -> Self {
+        Self(Box::into_raw(s.into_boxed_str()))
+    }
+
+    pub fn as_ptr(&self) -> *mut str {
+        self.0
+    }
+}
+
+impl Drop for RawString {
     fn drop(&mut self) {
-        // SAFETY: We made this pointer in VDomGuard::parse() so we know it is properly aligned and non-null
-        drop(unsafe { Box::from_raw(self.ptr) });
+        // SAFETY: the pointer is always valid because `RawString` can only be constructed through `RawString::new()`
+        unsafe {
+            drop(Box::from_raw(self.0));
+        };
     }
 }

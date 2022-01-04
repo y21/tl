@@ -10,7 +10,7 @@ fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
 
 #[test]
 fn inner_html() {
-    let dom = parse("abc <p>test</p> def", ParserOptions::default());
+    let dom = parse("abc <p>test</p> def", ParserOptions::default()).unwrap();
     let parser = dom.parser();
 
     let tag = force_as_tag(dom.children()[1].get(parser).unwrap());
@@ -23,7 +23,8 @@ fn children_len() {
     let dom = parse(
         "<!-- element 1 --> <div><div>element 3</div></div>",
         ParserOptions::default(),
-    );
+    )
+    .unwrap();
     assert_eq!(dom.children().len(), 2);
 }
 
@@ -32,7 +33,8 @@ fn get_element_by_id_default() {
     let dom = parse(
         "<div></div><p id=\"test\"></p><p></p>",
         ParserOptions::default(),
-    );
+    )
+    .unwrap();
 
     let tag = dom.get_element_by_id("test").expect("Element not present");
 
@@ -46,7 +48,8 @@ fn get_element_by_id_tracking() {
     let dom = parse(
         "<div></div><p id=\"test\"></p><p></p>",
         ParserOptions::default().track_ids(),
-    );
+    )
+    .unwrap();
 
     let tag = dom.get_element_by_id("test").expect("Element not present");
 
@@ -60,7 +63,8 @@ fn get_element_by_class_name_default() {
     let dom = parse(
         "<div></div><p class=\"a b\">hey</p><p></p>",
         ParserOptions::default(),
-    );
+    )
+    .unwrap();
 
     let tag = dom.get_elements_by_class_name("a").next().unwrap();
 
@@ -74,7 +78,8 @@ fn get_element_by_class_name_tracking() {
     let dom = parse(
         "<div></div><p class=\"a b\">hey</p><p></p>",
         ParserOptions::default().track_ids(),
-    );
+    )
+    .unwrap();
 
     let tag = dom.get_elements_by_class_name("a").next().unwrap();
 
@@ -85,7 +90,7 @@ fn get_element_by_class_name_tracking() {
 
 #[test]
 fn html5() {
-    let dom = parse("<!DOCTYPE html> hello", ParserOptions::default());
+    let dom = parse("<!DOCTYPE html> hello", ParserOptions::default()).unwrap();
 
     assert_eq!(dom.version(), Some(HTMLVersion::HTML5));
     assert_eq!(dom.children().len(), 1)
@@ -96,7 +101,8 @@ fn nested_inner_text() {
     let dom = parse(
         "<p>hello <p>nested element</p></p>",
         ParserOptions::default(),
-    );
+    )
+    .unwrap();
     let parser = dom.parser();
 
     let el = force_as_tag(dom.children()[0].get(parser).unwrap());
@@ -108,7 +114,7 @@ fn nested_inner_text() {
 fn owned_dom() {
     let owned_dom = {
         let input = String::from("<p id=\"test\">hello</p>");
-        let dom = unsafe { parse_owned(input, ParserOptions::default()) };
+        let dom = unsafe { parse_owned(input, ParserOptions::default()).unwrap() };
         dom
     };
 
@@ -124,7 +130,7 @@ fn owned_dom() {
 fn move_owned() {
     let input = String::from("<p id=\"test\">hello</p>");
 
-    let guard = unsafe { parse_owned(input, ParserOptions::default()) };
+    let guard = unsafe { parse_owned(input, ParserOptions::default()).unwrap() };
 
     fn move_me<T>(p: T) -> T {
         p
@@ -145,7 +151,7 @@ fn move_owned() {
 fn with() {
     let input = r#"<p>hello <span>whats up</span></p>"#;
 
-    let dom = parse(input, ParserOptions::default());
+    let dom = parse(input, ParserOptions::default()).unwrap();
     let parser = dom.parser();
 
     let tag = dom
@@ -162,13 +168,13 @@ fn with() {
 #[test]
 fn abrupt_attributes_stop() {
     let input = r#"<p "#;
-    parse(input, ParserOptions::default());
+    parse(input, ParserOptions::default()).unwrap();
 }
 
 #[test]
 fn dom_nodes() {
     let input = r#"<p><p><a>nested</a></p></p>"#;
-    let dom = parse(input, ParserOptions::default());
+    let dom = parse(input, ParserOptions::default()).unwrap();
     let parser = dom.parser();
     let element = dom
         .nodes()
@@ -182,19 +188,19 @@ fn dom_nodes() {
 fn fuzz() {
     // Some tests that would previously panic or end in an infinite loop
     // We don't need to assert anything here, just see that they finish
-    parse("J\x00<", ParserOptions::default());
-    parse("<!J", ParserOptions::default());
+    parse("J\x00<", ParserOptions::default()).unwrap();
+    parse("<!J", ParserOptions::default()).unwrap();
 
     // Miri is too slow... :(
     let count = if cfg!(miri) { 100usize } else { 10000usize };
 
-    parse(&"<p>".repeat(count), ParserOptions::default());
+    parse(&"<p>".repeat(count), ParserOptions::default()).unwrap();
 }
 
 #[test]
 fn query_selector_simple() {
     let input = "<div><p class=\"hi\">hello</p></div>";
-    let dom = parse(input, ParserOptions::default());
+    let dom = parse(input, ParserOptions::default()).unwrap();
     let parser = dom.parser();
     let mut selector = dom.query_selector(".hi").unwrap();
     let el = force_as_tag(selector.next().and_then(|x| x.get(parser)).unwrap());
@@ -206,7 +212,7 @@ fn query_selector_simple() {
 #[test]
 fn mutate_dom() {
     let input = r#"<img src="test.png" />"#;
-    let mut dom = parse(input, ParserOptions::default());
+    let mut dom = parse(input, ParserOptions::default()).unwrap();
 
     let mut selector = dom.query_selector("[src]").unwrap();
     let handle = selector.next().unwrap();
@@ -330,6 +336,13 @@ mod bytes {
     }
 
     #[test]
+    fn drop_old_owned() {
+        let mut x = Bytes::from("");
+        x.set("test".as_bytes()).unwrap();
+        x.set("test2".as_bytes()).unwrap();
+    }
+
+    #[test]
     fn clone_owned_deep() {
         let mut x = Bytes::from("");
         x.set(b"hello" as &[u8]).unwrap();
@@ -379,7 +392,7 @@ fn valueless_attribute() {
         </a>
     "#;
 
-    let dom = parse(input, ParserOptions::default());
+    let dom = parse(input, ParserOptions::default()).unwrap();
     let element = dom.get_element_by_id("u54423");
 
     assert!(element.is_some());
@@ -392,7 +405,7 @@ fn unquoted() {
         <a id=u54423>Hello World</a>
     "#;
 
-    let dom = parse(input, ParserOptions::default());
+    let dom = parse(input, ParserOptions::default()).unwrap();
     let parser = dom.parser();
     let element = dom.get_element_by_id("u54423");
 

@@ -3,7 +3,7 @@ use super::{
     handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
-use crate::{bytes::Bytes, inline::vec::InlineVec};
+use crate::{bytes::Bytes, errors::ParseError, inline::vec::InlineVec};
 use crate::{stream::Stream, ParserOptions};
 use crate::{util, InnerNodeHandle};
 use std::collections::HashMap;
@@ -431,12 +431,17 @@ impl<'a> Parser<'a> {
         self.tags.get_mut(id)
     }
 
-    pub(crate) fn parse(mut self) -> Parser<'a> {
+    pub(crate) fn parse(mut self) -> Result<Parser<'a>, ParseError> {
+        if self.stream.len() > u32::MAX as usize {
+            return Err(ParseError::InvalidLength);
+        }
+
         while !self.stream.is_eof() {
             if let Some(node) = self.parse_single() {
                 self.ast.push(node);
             }
         }
-        self
+
+        Ok(self)
     }
 }

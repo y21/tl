@@ -156,8 +156,8 @@ impl<'a> Bytes<'a> {
         }
     }
 
-    /// Sets the inner data to the given bytes
-    pub fn set<B: Into<Box<[u8]>>>(&mut self, data: B) -> Result<(), SetBytesError> {
+    /// Sets the inner data to the given bytes and returns the old bytes
+    pub fn set<B: Into<Box<[u8]>>>(&mut self, data: B) -> Result<Option<Box<[u8]>>, SetBytesError> {
         const MAX: usize = u32::MAX as usize;
 
         let data = <B as Into<Box<[u8]>>>::into(data);
@@ -167,8 +167,7 @@ impl<'a> Bytes<'a> {
         }
 
         // SAFETY: All invariants are checked
-        unsafe { self.set_unchecked(data) };
-        Ok(())
+        Ok(unsafe { self.set_unchecked(data) })
     }
 
     /// Sets the inner data to the given bytes without checking for validity of the data
@@ -176,12 +175,24 @@ impl<'a> Bytes<'a> {
     /// ## Safety
     /// - Once `data` is converted to a `Box<[u8]>`, its length must not be greater than u32::MAX
     #[inline]
-    pub unsafe fn set_unchecked<B: Into<Box<[u8]>>>(&mut self, data: B) {
+    pub unsafe fn set_unchecked<B: Into<Box<[u8]>>>(&mut self, data: B) -> Option<Box<[u8]>> {
         let data = <B as Into<Box<[u8]>>>::into(data);
 
         let (ptr, len) = boxed_slice_to_compact_parts(data);
 
-        self.data = BytesInner::Owned(ptr, len);
+        let bytes = BytesInner::Owned(ptr, len);
+        let old = std::mem::replace(&mut self.data, bytes);
+
+        // we cannot let Drop code run because that would deallocate `old`
+        let old = ManuallyDrop::new(old);
+
+        match &*old {
+            BytesInner::Borrowed(_, _) => None,
+            BytesInner::Owned(ptr, len) => {
+                let len = *len as usize;
+                Some(Vec::from_raw_parts(*ptr, len, len).into_boxed_slice())
+            }
+        }
     }
 }
 
