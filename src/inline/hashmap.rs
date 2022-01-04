@@ -35,7 +35,7 @@ where
         self.0.inline_parts_mut()
     }
 
-    /// Copies `self` into a new `Vec<T>`
+    /// Copies `self` into a new `HashMap<K, V>`
     #[inline]
     pub fn to_map(&self) -> HashMap<K, V>
     where
@@ -55,6 +55,12 @@ where
     #[inline]
     pub fn insert(&mut self, key: K, value: V) {
         self.0.insert(key, value)
+    }
+
+    /// Removes an element from the map, and returns ownership over the value
+    #[inline]
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        self.0.remove(key)
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -210,6 +216,30 @@ impl<K: Eq + Hash, V, const N: usize> InlineHashMapInner<K, V, N> {
         }
     }
 
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        match self {
+            Self::Inline { data, len } => {
+                let idx = data
+                    .iter()
+                    .take(*len)
+                    .map(|x| unsafe { &*x.as_ptr() })
+                    .position(|x| &x.0 == key)?;
+
+                let element = unsafe {
+                    std::mem::replace(data.get_unchecked_mut(idx), MaybeUninit::uninit())
+                };
+
+                // HashMap order is not guaranteed, so instead of swapping every item like we do with InlineVec,
+                // we can simply swap the last item with the one we want to remove.
+                data.swap(idx, *len - 1);
+                *len -= 1;
+
+                Some(unsafe { element.assume_init().1 })
+            }
+            Self::Heap(h) => h.remove(key),
+        }
+    }
+
     pub fn insert(&mut self, k: K, v: V) {
         let (array, len) = match self {
             Self::Inline { data, len } => (data, len),
@@ -312,6 +342,57 @@ impl<'a, K, V> Iterator for InlineHashMapIterator<'a, K, V> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inlinehashmap_remove() {
+        let mut x = InlineHashMap::<usize, usize, 4>::new();
+        x.insert(789, 1336);
+        assert_eq!(x.len(), 1);
+        assert_eq!(x.get(&789), Some(&1336));
+        assert_eq!(x.remove(&789), Some(1336));
+        assert_eq!(x.len(), 0);
+
+        assert_eq!(x.remove(&789), None);
+
+        for i in 0..4 {
+            x.insert(i, i * 2);
+        }
+
+        assert!(!x.is_heap_allocated());
+        assert_eq!(x.len(), 4);
+
+        assert_eq!(x.remove(&2), Some(4));
+        assert_eq!(x.len(), 3);
+
+        assert_eq!(x.remove(&3), Some(6));
+        assert_eq!(x.len(), 2);
+
+        assert_eq!(x.remove(&1), Some(2));
+        assert_eq!(x.len(), 1);
+
+        assert_eq!(x.remove(&0), Some(0));
+        assert_eq!(x.len(), 0);
+        assert!(!x.is_heap_allocated());
+
+        // trigger heap allocation
+        for i in 0..8 {
+            x.insert(i, i * 2);
+        }
+        assert!(x.is_heap_allocated());
+        assert_eq!(x.len(), 8);
+
+        assert_eq!(x.remove(&7), Some(14));
+        assert_eq!(x.remove(&0), Some(0));
+    }
+
+    #[test]
+    fn inlinehashmap_remove_heap() {
+        let mut x = InlineHashMap::<usize, String, 4>::new();
+        x.insert(42, "test".into());
+        assert_eq!(x.len(), 1);
+        assert_eq!(x.remove(&42), Some("test".into()));
+        assert_eq!(x.len(), 0);
+    }
 
     #[test]
     fn inlinehashmap_clone() {

@@ -54,6 +54,21 @@ impl<T, const N: usize> InlineVec<T, N> {
         self.0.get(index)
     }
 
+    /// Returns a mutable reference to the value at the given index
+    #[inline]
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.0.get_mut(index)
+    }
+
+    /// Removes an element at a given index
+    ///
+    /// # Panics
+    /// Just like `Vec::remove`, this method will panic if the index is out of bounds.
+    #[inline]
+    pub fn remove(&mut self, index: usize) -> T {
+        self.0.remove(index)
+    }
+
     /// Returns an iterator over the elements of this vector
     #[inline]
     pub fn iter(&self) -> InlineVecIter<'_, T, N> {
@@ -179,6 +194,44 @@ impl<T, const N: usize> InlineVecInner<T, N> {
                 }
             }
             Self::Heap(vec) => vec.get(idx),
+        }
+    }
+
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
+        match self {
+            Self::Inline { data, len } => {
+                if idx < *len {
+                    Some(unsafe { &mut *data.get_unchecked_mut(idx).as_mut_ptr() })
+                } else {
+                    None
+                }
+            }
+            Self::Heap(vec) => vec.get_mut(idx),
+        }
+    }
+
+    pub fn remove(&mut self, idx: usize) -> T {
+        match self {
+            Self::Inline { data, len } => {
+                assert!(idx < *len);
+
+                // at this point we know idx is in bounds
+                // carefully replace the value with MaybeUninit::uninit(), so it can be returned
+                let element = unsafe {
+                    std::mem::replace(data.get_unchecked_mut(idx), MaybeUninit::uninit())
+                };
+
+                for i in idx + 1..*len {
+                    // TODO(y21): data.swap_unchecked() worth it?
+                    data.swap(i, i - 1);
+                }
+
+                *len -= 1;
+
+                // we've made sure that idx is in bounds and if idx is in bounds, then `T` must be initialized
+                unsafe { element.assume_init() }
+            }
+            Self::Heap(h) => h.remove(idx),
         }
     }
 
@@ -342,6 +395,61 @@ mod tests {
     }
 
     #[test]
+    fn inlinevec_remove() {
+        let mut x = InlineVecInner::<usize, 4>::new();
+        x.push(789);
+        assert_eq!(x.len(), 1);
+        assert_eq!(x.get(0), Some(&789));
+        assert_eq!(x.remove(0), 789);
+        assert_eq!(x.len(), 0);
+
+        {
+            let mut xc = x.clone();
+            // out of bounds index must panic
+            assert!(std::panic::catch_unwind(move || xc.remove(0)).is_err());
+        }
+
+        for i in 0..4 {
+            x.push(i * 2);
+        }
+
+        assert!(!x.is_heap_allocated());
+        assert_eq!(x.as_slice(), &[0, 2, 4, 6]);
+
+        assert_eq!(x.remove(2), 4);
+        assert_eq!(x.as_slice(), &[0, 2, 6]);
+
+        assert_eq!(x.remove(2), 6);
+        assert_eq!(x.as_slice(), &[0, 2]);
+
+        assert_eq!(x.remove(1), 2);
+        assert_eq!(x.as_slice(), &[0]);
+
+        assert_eq!(x.remove(0), 0);
+        assert_eq!(x.as_slice(), &[]);
+        assert!(!x.is_heap_allocated());
+
+        // trigger heap allocation
+        for i in 0..8 {
+            x.push(i * 2);
+        }
+        assert!(x.is_heap_allocated());
+        assert_eq!(x.as_slice(), &[0, 2, 4, 6, 8, 10, 12, 14]);
+
+        assert_eq!(x.remove(7), 14);
+        assert_eq!(x.remove(0), 0);
+    }
+
+    #[test]
+    fn inlinevec_remove_heap() {
+        let mut x = InlineVecInner::<String, 4>::new();
+        x.push("test".into());
+        assert_eq!(x.len(), 1);
+        assert_eq!(x.remove(0), "test");
+        assert_eq!(x.len(), 0);
+    }
+
+    #[test]
     fn inlinevec() {
         let mut x = InlineVecInner::<usize, 4>::new();
         assert_eq!(x.len(), 0);
@@ -375,6 +483,10 @@ mod tests {
         assert!(x.is_heap_allocated());
 
         assert_eq!(x.get(1337), None);
+
+        *x.get_mut(0).unwrap() = 444;
+        assert_eq!(x.get(0), Some(&444));
+        assert_eq!(x.get_mut(99999 /* out of bounds */), None);
     }
 
     #[test]
