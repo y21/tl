@@ -78,6 +78,21 @@ impl<'a> Attributes<'a> {
             _ => self.raw.get_mut(&key).map(Option::as_mut),
         }
     }
+
+    /// Inserts a new attribute into this attributes collection
+    pub fn insert_attribute<B>(&mut self, key: B, value: Option<B>)
+    where
+        B: Into<Bytes<'a>>,
+    {
+        let key: Bytes = key.into();
+        let value = value.map(Into::into);
+
+        match key.as_bytes() {
+            b"id" => self.id = value,
+            b"class" => self.class = value,
+            _ => self.raw.insert(key, value),
+        };
+    }
 }
 
 /// Represents a single HTML element
@@ -135,6 +150,25 @@ impl<'a> HTMLTag<'a> {
     /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
     pub fn inner_html(&self) -> Bytes<'a> {
         self._raw.clone()
+    }
+
+    /// Returns a mutable reference to the contained markup
+    ///
+    /// **Note:** Mutating this does *not* re-compute the HTML representation of this tag.
+    ///
+    /// # Example
+    /// ```
+    /// # use tl::*;
+    /// let mut dom = parse("<div>Hello</div>", ParserOptions::default()).unwrap();
+    /// let div = dom.query_selector("div").unwrap().next().unwrap();
+    /// let parser = dom.parser_mut();
+    ///
+    /// let element = div.get_mut(parser).unwrap().as_tag_mut().unwrap();
+    /// element.inner_html_mut().set("<div>World</div>".as_bytes());
+    /// assert_eq!(element.inner_html().as_bytes(), b"<div>World</div>");
+    /// ```
+    pub fn inner_html_mut(&mut self) -> &mut Bytes<'a> {
+        &mut self._raw
     }
 
     /// Returns the contained text of this element, excluding any markup

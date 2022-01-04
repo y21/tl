@@ -95,7 +95,7 @@ unsafe fn compact_bytes_to_slice<'a>(ptr: *const u8, l: u32) -> &'a [u8] {
 /// Converts a boxed byte slice to compact raw parts
 ///
 /// The caller is responsible for freeing the returned pointer and that the length of the slice does not overflow a u32!
-unsafe fn boxed_slice_to_compact_parts(slice: Box<[u8]>) -> (*mut u8, u32) {
+unsafe fn boxed_slice_into_compact_parts(slice: Box<[u8]>) -> (*mut u8, u32) {
     // wrap box in `ManuallyDrop` so it's not dropped at the end of the scope
     let mut slice = ManuallyDrop::new(slice);
     let len = slice.len();
@@ -108,7 +108,7 @@ unsafe fn boxed_slice_to_compact_parts(slice: Box<[u8]>) -> (*mut u8, u32) {
 #[inline]
 unsafe fn clone_compact_bytes_parts(ptr: *mut u8, len: u32) -> (*mut u8, u32) {
     let slice = compact_bytes_to_slice(ptr, len).to_vec().into_boxed_slice();
-    boxed_slice_to_compact_parts(slice)
+    boxed_slice_into_compact_parts(slice)
 }
 
 // Custom `Debug` trait is implemented which displays the data as a UTF8 string,
@@ -120,6 +120,15 @@ impl<'a> Debug for Bytes<'a> {
 }
 
 impl<'a> Bytes<'a> {
+    /// Creates an empty `Bytes`
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            data: BytesInner::Borrowed("".as_bytes().as_ptr(), 0),
+            _lt: PhantomData,
+        }
+    }
+
     /// Convenient method for lossy-encoding the data as UTF8
     #[inline]
     pub fn as_utf8_str(&self) -> Cow<'_, str> {
@@ -156,11 +165,11 @@ impl<'a> Bytes<'a> {
         }
     }
 
-    /// Sets the inner data to the given bytes and returns the old bytes
-    pub fn set<B: Into<Box<[u8]>>>(&mut self, data: B) -> Result<Option<Box<[u8]>>, SetBytesError> {
+    /// Sets the inner data to the given data and returns the old bytes
+    pub fn set<B: IntoOwnedBytes>(&mut self, data: B) -> Result<Option<Box<[u8]>>, SetBytesError> {
         const MAX: usize = u32::MAX as usize;
 
-        let data = <B as Into<Box<[u8]>>>::into(data);
+        let data = <B as IntoOwnedBytes>::into_bytes(data);
 
         if data.len() > MAX {
             return Err(SetBytesError::LengthOverflow);
@@ -170,15 +179,15 @@ impl<'a> Bytes<'a> {
         Ok(unsafe { self.set_unchecked(data) })
     }
 
-    /// Sets the inner data to the given bytes without checking for validity of the data
+    /// Sets the inner data to the given data without checking for validity of the data
     ///
     /// ## Safety
     /// - Once `data` is converted to a `Box<[u8]>`, its length must not be greater than u32::MAX
     #[inline]
-    pub unsafe fn set_unchecked<B: Into<Box<[u8]>>>(&mut self, data: B) -> Option<Box<[u8]>> {
-        let data = <B as Into<Box<[u8]>>>::into(data);
+    pub unsafe fn set_unchecked<B: IntoOwnedBytes>(&mut self, data: B) -> Option<Box<[u8]>> {
+        let data = <B as IntoOwnedBytes>::into_bytes(data);
 
-        let (ptr, len) = boxed_slice_to_compact_parts(data);
+        let (ptr, len) = boxed_slice_into_compact_parts(data);
 
         let bytes = BytesInner::Owned(ptr, len);
         let old = std::mem::replace(&mut self.data, bytes);
@@ -193,6 +202,49 @@ impl<'a> Bytes<'a> {
                 Some(Vec::from_raw_parts(*ptr, len, len).into_boxed_slice())
             }
         }
+    }
+}
+
+mod private {
+    pub trait Sealed {}
+}
+
+/// A trait implemented on types that can be used for `Bytes::set`.
+///
+/// This trait is sealed and cannot be implemented outside of this crate.
+pub trait IntoOwnedBytes: private::Sealed {
+    fn into_bytes(self) -> Box<[u8]>;
+}
+
+macro_rules! impl_into_owned_bytes_trivial {
+    ($($t:ty),*) => {
+        $(
+            impl private::Sealed for $t {}
+            impl IntoOwnedBytes for $t {
+                #[inline]
+                fn into_bytes(self) -> Box<[u8]> {
+                    self.into()
+                }
+            }
+        )*
+    };
+}
+
+impl_into_owned_bytes_trivial!(Box<[u8]>, &[u8], Vec<u8>);
+
+impl private::Sealed for &str {}
+impl IntoOwnedBytes for &str {
+    #[inline]
+    fn into_bytes(self) -> Box<[u8]> {
+        self.as_bytes().into()
+    }
+}
+
+impl private::Sealed for String {}
+impl IntoOwnedBytes for String {
+    #[inline]
+    fn into_bytes(self) -> Box<[u8]> {
+        self.into_bytes().into()
     }
 }
 

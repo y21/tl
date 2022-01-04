@@ -29,3 +29,9 @@ name = "queryselector"
 path = "fuzz_targets/queryselector.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "parse_mut"
+path = "fuzz_targets/parse_mut.rs"
+test = false
+doc = false

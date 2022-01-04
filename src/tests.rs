@@ -223,9 +223,28 @@ fn mutate_dom() {
     let tag = el.as_tag_mut().unwrap();
     let attr = tag.attributes_mut();
     let bytes = attr.get_attribute_mut("src").flatten().unwrap();
-    bytes.set("world.png".as_bytes()).unwrap();
+    bytes.set("world.png").unwrap();
 
     assert_eq!(attr.get_attribute("src"), Some(Some("world.png".into())));
+}
+
+#[test]
+fn mutate_dom2() {
+    let input = r#"
+        <div id="u54423">Hello World</div>
+        <p>This is a paragraph</p>
+        <h1 class="x">This is a heading</h1>
+    "#;
+
+    let mut dom = parse(input, ParserOptions::default()).unwrap();
+    for node in dom.nodes_mut() {
+        if let Some(tag) = node.as_tag_mut() {
+            tag.attributes_mut()
+                .insert_attribute("test", Some("testing"));
+
+            tag.inner_html_mut().set("<b>Hello World</b>").unwrap();
+        }
+    }
 }
 
 #[cfg(feature = "simd")]
@@ -314,7 +333,7 @@ mod bytes {
         assert_eq!(xb.as_bytes_borrowed(), Some(b"hello" as &[u8]));
 
         let mut xc = xb.clone();
-        xc.set(b"test2" as &[u8]).unwrap();
+        xc.set("test2").unwrap();
         assert_eq!(xc.as_bytes_borrowed(), None);
     }
 
@@ -338,14 +357,14 @@ mod bytes {
     #[test]
     fn drop_old_owned() {
         let mut x = Bytes::from("");
-        x.set("test".as_bytes()).unwrap();
-        x.set("test2".as_bytes()).unwrap();
+        x.set("test").unwrap();
+        x.set("test2").unwrap();
     }
 
     #[test]
     fn clone_owned_deep() {
         let mut x = Bytes::from("");
-        x.set(b"hello" as &[u8]).unwrap();
+        x.set("hello").unwrap();
         let xp = x.as_ptr();
 
         let y = x.clone();
@@ -356,11 +375,22 @@ mod bytes {
     }
 
     #[test]
+    fn empty() {
+        let _x = Bytes::new();
+    }
+
+    #[test]
+    fn empty_set() {
+        let mut x = Bytes::new();
+        x.set("hello").unwrap();
+    }
+
+    #[test]
     fn set() {
         let mut x = Bytes::from("hello");
         let xp = x.as_ptr();
 
-        x.set(b"world" as &[u8]).unwrap();
+        x.set("world").unwrap();
         let xp2 = x.as_ptr();
 
         // check that the changes are reflected
@@ -376,10 +406,28 @@ mod bytes {
         let xp = x.as_ptr();
 
         let mut y = x.clone();
-        y.set(b"world" as &[u8]).unwrap();
+        y.set("world").unwrap();
         let yp = y.as_ptr();
 
         assert_ne!(xp, yp);
+    }
+
+    #[test]
+    fn into_owned_bytes() {
+        let mut x1 = Bytes::new();
+        x1.set("hello").unwrap(); // &str
+
+        let mut x2 = x1.clone();
+        x2.set(b"world" as &[u8]).unwrap(); // &[u8]
+
+        let mut x3 = x1.clone();
+        x3.set(vec![0u8, 1, 2, 3, 4]).unwrap(); // Vec<u8>
+
+        let mut x4 = x1.clone();
+        x4.set(vec![0u8, 1, 2, 3, 4].into_boxed_slice()).unwrap(); // Box<[u8]>
+
+        let mut x5 = x1.clone();
+        x5.set(String::from("Tests are important")).unwrap(); // String
     }
 }
 

@@ -102,9 +102,22 @@ impl<'a> VDom<'a> {
         &self.parser.tags
     }
 
+    /// Returns a mutable slice of *all* the elements in the HTML document
+    ///
+    /// The difference between `children()` and `nodes()` is that children only returns the immediate children of the root node,
+    /// while `nodes()` returns all nodes, including nested tags.
+    pub fn nodes_mut(&mut self) -> &mut [Node<'a>] {
+        &mut self.parser.tags
+    }
+
     /// Returns the topmost subnodes ("children") of this DOM
     pub fn children(&self) -> &[NodeHandle] {
         &self.parser.ast
+    }
+
+    /// Returns a mutable reference to the topmost subnodes ("children") of this DOM
+    pub fn children_mut(&mut self) -> &mut [NodeHandle] {
+        &mut self.parser.ast
     }
 
     /// Returns the HTML version.
@@ -204,9 +217,16 @@ impl<'a> VDomGuard<'a> {
 impl<'a> VDomGuard<'a> {
     /// Returns a reference to the inner DOM.
     ///
-    /// The lifetime of `VDOM` is bound to self so that elements cannot outlive this `VDomGuard` struct.
+    /// The lifetime of the returned `VDom` is bound to self so that elements cannot outlive this `VDomGuard` struct.
     pub fn get_ref<'b>(&'a self) -> &'b VDom<'a> {
         &self.dom
+    }
+
+    /// Returns a mutable reference to the inner DOM.
+    ///
+    /// The lifetime of the returned `VDom` is bound to self so that elements cannot outlive this `VDomGuard` struct.
+    pub fn get_mut_ref<'b>(&'b mut self) -> &'b VDom<'a> {
+        &mut self.dom
     }
 }
 
