@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
+use std::ptr;
 use std::{collections::HashMap, mem::MaybeUninit};
 
 /// Similar to InlineVec, this structure will use an array
@@ -8,8 +9,6 @@ use std::{collections::HashMap, mem::MaybeUninit};
 ///
 /// Hashing can be slower than just iterating through an array
 /// if the array is small, which is where it makes most sense
-///
-/// To convert to a HashMap, use `HashMap::from()`
 #[derive(Debug, Clone)]
 pub struct InlineHashMap<K, V, const N: usize>(InlineHashMapInner<K, V, N>);
 
@@ -26,6 +25,24 @@ where
     #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    /// If `self` is inlined, this returns the underlying raw parts that make up this `InlineHashMap`.
+    ///
+    /// Only the first `.1` elements are initialized.
+    #[inline]
+    pub fn inline_parts_mut(&mut self) -> Option<(&mut [MaybeUninit<(K, V)>; N], usize)> {
+        self.0.inline_parts_mut()
+    }
+
+    /// Copies `self` into a new `Vec<T>`
+    #[inline]
+    pub fn to_map(&self) -> HashMap<K, V>
+    where
+        K: Clone + Hash + Eq,
+        V: Clone,
+    {
+        self.0.to_map()
     }
 
     /// Checks whether this vector is allocated on the heap
@@ -105,24 +122,11 @@ where
     }
 }
 
-impl<K, V, const N: usize> From<InlineHashMap<K, V, N>> for HashMap<K, V>
-where
-    K: Eq + Hash,
-{
-    fn from(map: InlineHashMap<K, V, N>) -> Self {
-        match map.0 {
-            InlineHashMapInner::Heap(m) => m,
-            InlineHashMapInner::Inline { len, data } => {
-                let mut new_data = HashMap::with_capacity(len);
-
-                let iter = data.into_iter().take(len);
-
-                for element in iter {
-                    let (k, v) = unsafe { element.assume_init() };
-                    new_data.insert(k, v);
-                }
-
-                new_data
+impl<K, V, const N: usize> Drop for InlineHashMapInner<K, V, N> {
+    fn drop(&mut self) {
+        if let Some((data, len)) = self.inline_parts_mut() {
+            for element in data.iter_mut().take(len) {
+                unsafe { ptr::drop_in_place(element.as_mut_ptr()) };
             }
         }
     }
@@ -134,6 +138,38 @@ impl<K, V, const N: usize> InlineHashMapInner<K, V, N> {
         Self::Inline {
             len: 0,
             data: super::uninit_array(),
+        }
+    }
+
+    #[inline]
+    pub fn inline_parts_mut(&mut self) -> Option<(&mut [MaybeUninit<(K, V)>; N], usize)> {
+        match self {
+            Self::Heap(_) => None,
+            Self::Inline { len, data } => Some((data, *len)),
+        }
+    }
+
+    #[inline]
+    fn to_map(&self) -> HashMap<K, V>
+    where
+        K: Clone + Hash + Eq,
+        V: Clone,
+    {
+        match &self {
+            InlineHashMapInner::Heap(m) => m.clone(),
+            InlineHashMapInner::Inline { len, data } => {
+                let mut new_data = HashMap::with_capacity(*len);
+
+                let iter = data.into_iter().take(*len);
+
+                for element in iter {
+                    let element = unsafe { &*element.as_ptr() };
+                    let (key, value) = element.clone();
+                    new_data.insert(key, value);
+                }
+
+                new_data
+            }
         }
     }
 
@@ -196,7 +232,10 @@ impl<K: Eq + Hash, V, const N: usize> InlineHashMapInner<K, V, N> {
 
             // insert new element
             map.insert(k, v);
-            *self = Self::Heap(map);
+            let new_heap = Self::Heap(map);
+
+            // do not call the destructor!
+            unsafe { ptr::write(self, new_heap) };
             return;
         } else {
             array[*len].write((k, v));
@@ -286,6 +325,88 @@ mod tests {
         assert_eq!(x.len(), 10);
         assert!(x.is_heap_allocated());
         assert_eq!(x.get(&9), Some(&18));
+    }
+
+    #[test]
+    fn inlinehashmap_to_map_stack() {
+        let mut x = InlineHashMapInner::<usize, usize, 4>::new();
+
+        for i in 0..4 {
+            x.insert(i, i * 2);
+        }
+
+        assert!(!x.is_heap_allocated());
+        assert_eq!(x.len(), 4);
+
+        let xx = x.to_map();
+        assert_eq!(xx.get(&0), Some(&0));
+        assert_eq!(xx.get(&1), Some(&2));
+        assert_eq!(xx.get(&2), Some(&4));
+        assert_eq!(xx.get(&3), Some(&6));
+        assert_eq!(xx.len(), 4);
+
+        x.insert(42, 1337);
+        assert!(x.is_heap_allocated());
+        assert_eq!(x.len(), 5);
+        assert_eq!(x.get(&42), Some(&1337));
+
+        let xx = x.to_map();
+        assert_eq!(xx.get(&0), Some(&0));
+        assert_eq!(xx.get(&42), Some(&1337));
+        assert_eq!(xx.len(), 5);
+    }
+
+    #[test]
+    fn inlinehashmap_to_map_heap() {
+        let mut x = InlineHashMapInner::<usize, String, 4>::new();
+
+        for i in 0..4 {
+            x.insert(i, i.to_string());
+        }
+
+        assert!(!x.is_heap_allocated());
+        assert_eq!(x.len(), 4);
+
+        let xx = x.to_map();
+        assert_eq!(&*xx[&0], "0");
+        assert_eq!(&*xx[&1], "1");
+        assert_eq!(&*xx[&2], "2");
+        assert_eq!(&*xx[&3], "3");
+        assert_eq!(xx.len(), 4);
+
+        x.insert(42, "1337".into());
+        assert!(x.is_heap_allocated());
+        assert_eq!(x.len(), 5);
+        assert_eq!(x.get(&42).map(|x| &**x), Some("1337"));
+
+        let xx = x.to_map();
+        assert_eq!(&*xx[&0], "0");
+        assert_eq!(&*xx[&42], "1337");
+        assert_eq!(xx.len(), 5);
+    }
+
+    #[test]
+    fn inlinehashmap_drop_stack() {
+        let mut x = InlineHashMapInner::<usize, String, 4>::new();
+
+        for i in 0..3 {
+            x.insert(i, i.to_string());
+        }
+
+        assert_eq!(x.len(), 3);
+        assert!(!x.is_heap_allocated());
+    }
+
+    #[test]
+    fn inlinehashmap_drop_heap() {
+        let mut x = InlineHashMapInner::<usize, String, 4>::new();
+
+        for i in 0..16 {
+            x.insert(i, i.to_string());
+        }
+
+        assert_eq!(x.len(), 16);
+        assert!(x.is_heap_allocated());
     }
 
     #[test]
