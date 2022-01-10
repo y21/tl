@@ -6,7 +6,7 @@ use std::{
     mem::ManuallyDrop,
 };
 
-/// A wrapper around raw bytes
+/// A storage type for raw bytes, used by the parser
 #[derive(Eq, PartialOrd, Ord)]
 pub struct Bytes<'a> {
     /// The inner data
@@ -26,6 +26,8 @@ enum BytesInner {
     /// Borrowed bytes
     Borrowed(*const u8, u32),
     /// Owned bytes
+    ///
+    /// This pointer is managed and will be freed when dropped
     Owned(*mut u8, u32),
 }
 

@@ -127,20 +127,21 @@ impl<'a> VDom<'a> {
     }
 
     /// Returns the contained markup of all of the elements in this DOM.
-    /// 
+    ///
+    /// ## Example
     /// ```
     /// let html = r#"<div><p href="/about" id="find-me">Hello world</p></div>"#;
     /// let mut dom = tl::parse(html, Default::default()).unwrap();
-    /// 
+    ///
     /// let element = dom.get_element_by_id("find-me")
     ///     .unwrap()
     ///     .get_mut(dom.parser_mut())
     ///     .unwrap()
     ///     .as_tag_mut()
     ///     .unwrap();
-    /// 
+    ///
     /// element.attributes_mut().get_mut("href").flatten().unwrap().set("/");
-    /// 
+    ///
     /// assert_eq!(dom.inner_html(), r#"<div><p href="/" id="find-me">Hello world</p></div>"#);
     /// ```
     pub fn inner_html(&self) -> String {

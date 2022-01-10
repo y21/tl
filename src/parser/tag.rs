@@ -52,11 +52,12 @@ impl<'a> Attributes<'a> {
 
     /// Checks whether a given string is in the class names list
     pub fn is_class_member<B: AsRef<[u8]>>(&self, member: B) -> bool {
-        self.class_iter().map_or(false, |mut i| i.any(|s| s.as_bytes() == member.as_ref()))
+        self.class_iter()
+            .map_or(false, |mut i| i.any(|s| s.as_bytes() == member.as_ref()))
     }
 
     /// Checks whether this attributes collection contains a given key and returns its value
-    /// 
+    ///
     /// Attributes that exist in this tag but have no value set will have their inner Option set to None
     pub fn get<B>(&self, key: B) -> Option<Option<Bytes<'a>>>
     where
@@ -102,7 +103,8 @@ impl<'a> Attributes<'a> {
 
     /// Returns an iterator `(attribute_key, attribute_value)` over the attributes of this `HTMLTag`
     pub fn iter(&self) -> impl Iterator<Item = (Cow<str>, Option<Cow<str>>)> + '_ {
-        self.raw.iter()
+        self.raw
+            .iter()
             .map(|(k, v)| {
                 let k = k.as_utf8_str();
                 let v = v.as_ref().map(|x| x.as_utf8_str());
@@ -110,8 +112,14 @@ impl<'a> Attributes<'a> {
                 (Some(k), v)
             })
             .chain([
-                (self.id.is_some().then(|| Cow::Borrowed("id")), self.id.as_ref().map(|x| x.as_utf8_str())),
-                (self.class.is_some().then(|| Cow::Borrowed("class")), self.class.as_ref().map(|x| x.as_utf8_str())),
+                (
+                    self.id.is_some().then(|| Cow::Borrowed("id")),
+                    self.id.as_ref().map(|x| x.as_utf8_str()),
+                ),
+                (
+                    self.class.is_some().then(|| Cow::Borrowed("class")),
+                    self.class.as_ref().map(|x| x.as_utf8_str()),
+                ),
             ])
             .flat_map(|(k, v)| k.map(|k| (k, v)))
     }
@@ -128,11 +136,14 @@ impl<'a> Attributes<'a> {
 
     /// Returns an iterator over all of the class members
     pub fn class_iter(&self) -> Option<impl Iterator<Item = &'_ str> + '_> {
-        self.class.as_ref().and_then(Bytes::try_as_utf8_str).map(str::split_ascii_whitespace)
+        self.class
+            .as_ref()
+            .and_then(Bytes::try_as_utf8_str)
+            .map(str::split_ascii_whitespace)
     }
 
     /// Returns the underlying raw map for attributes
-    /// 
+    ///
     /// ## A note on stability
     /// It is not guaranteed for the returned map to include all attributes.
     /// Some attributes may be stored in `Attributes` itself and not in the raw map.
@@ -200,6 +211,11 @@ impl<'a> HTMLTag<'a> {
     }
 
     /// Returns the contained markup
+    ///
+    /// ## Limitations
+    /// - The order of tag attributes is not guaranteed
+    /// - Spaces within the tag are not guaranteed to be preserved (i.e. `<img      src="">` may become `<img src="">`)
+    ///
     /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
     pub fn inner_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
         let mut inner_html = format!("<{}", self._name.as_utf8_str());
@@ -237,9 +253,9 @@ impl<'a> HTMLTag<'a> {
         inner_html
     }
 
-    /// Returns the raw HTML of this tag. 
+    /// Returns the raw HTML of this tag.
     /// This is a cheaper version of `HTMLTag::inner_html` if you never mutate any nodes.
-    /// 
+    ///
     /// **Note:** Mutating this tag does *not* re-compute the HTML representation of this tag.
     /// This simply returns a reference to the substring.
     pub fn raw(&self) -> &Bytes<'a> {
