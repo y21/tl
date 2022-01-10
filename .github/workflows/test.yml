@@ -20,7 +20,7 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
-          components: miri
+          components: miri, fuzz
 
       - name: Test
         uses: actions-rs/cargo@v1
@@ -38,3 +38,9 @@ jobs:
         with:
           command: miri
           args: test
+
+      - name: Fuzz
+        uses: actions-rs/cargo@v1
+        with:
+          command: fuzz
+          args: run parse -- -runs=500000
