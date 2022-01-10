@@ -17,7 +17,7 @@ pub struct ParserOptions {
 }
 
 // some reasonable default max depth
-const MAX_DEFAULT_DEPTH: usize = 256;
+const MAX_DEFAULT_DEPTH: usize = 250;
 
 impl Default for ParserOptions {
     fn default() -> Self {

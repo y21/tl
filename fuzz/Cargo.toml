@@ -19,7 +19,19 @@ path = ".."
 members = ["."]
 
 [[bin]]
-name = "fuzz_target_1"
-path = "fuzz_targets/fuzz_target_1.rs"
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "queryselector"
+path = "fuzz_targets/queryselector.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parse_mut"
+path = "fuzz_targets/parse_mut.rs"
 test = false
 doc = false

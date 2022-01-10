@@ -35,7 +35,7 @@ pub enum Selector<'a> {
 impl<'a> Selector<'a> {
     pub fn matches<'b>(&self, dom: &VDom<'b>, node: &Node<'b>) -> bool {
         match self {
-            Self::Tag(tag) => node.as_tag().map_or(false, |t| t._name.raw().eq(*tag)),
+            Self::Tag(tag) => node.as_tag().map_or(false, |t| t._name.as_bytes().eq(*tag)),
             Self::Id(id) => node
                 .as_tag()
                 .map_or(false, |t| t._attributes.id == Some((*id).into())),
@@ -47,7 +47,7 @@ impl<'a> Selector<'a> {
             Self::All => true,
             Self::Attribute(attribute) => node
                 .as_tag()
-                .map_or(false, |t| t._attributes.get_attribute(*attribute).is_some()),
+                .map_or(false, |t| t._attributes.get(*attribute).is_some()),
             Self::AttributeValue(attribute, value) => {
                 check_attribute(node, attribute, value, |attr, value| attr == value)
             }
@@ -78,7 +78,7 @@ where
 {
     node.as_tag().map_or(false, |t| {
         t._attributes
-            .get_attribute(attribute)
+            .get(attribute)
             .flatten()
             .map_or(false, |attr| {
                 callback(&attr.as_utf8_str(), &String::from_utf8_lossy(value))

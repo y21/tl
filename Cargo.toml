@@ -1,10 +1,10 @@
 [package]
 name = "tl"
-version = "0.4.4"
+version = "0.5.0"
 authors = ["y21"]
 edition = "2021"
 license = "MIT"
-description = "html parser written in rust"
+description = "Fast HTML parser written in pure Rust"
 repository = "https://github.com/y21/tl"
 homepage = "https://github.com/y21/tl"
 readme = "README.md"

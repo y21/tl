@@ -2,6 +2,7 @@
 tl is a fast HTML parser written in pure Rust. <br />
 
 - [Usage](#usage)
+- [Examples](#examples)
 - [SIMD-accelerated parsing](#simd-accelerated-parsing)
 - [Benchmarks](#benchmarks)
 - [Design](#design)
@@ -10,18 +11,19 @@ tl is a fast HTML parser written in pure Rust. <br />
 Add `tl` to your dependencies.
 ```toml
 [dependencies]
-tl = "0.4.4"
+tl = "0.5.0"
 # or, if you need SIMD
-tl = { version = "0.4.4", features = ["simd"] }
+tl = { version = "0.5.0", features = ["simd"] }
 ```
 
 The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting AST, although in the future this will likely be customizable, in case you need explicit error checking.
 
+## Examples
 Finding an element by its id attribute and printing the inner text:
 ```rust
 fn main() {
     let input = r#"<p id="text">Hello</p>"#;
-    let dom = tl::parse(input, tl::ParserOptions::default());
+    let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
     let parser = dom.parser();
     let element = dom.get_element_by_id("text")
         .expect("Failed to find element")
@@ -36,7 +38,7 @@ Finding a tag using the query selector API:
 ```rust
 fn main() {
     let input = r#"<div><img src="cool-image.png" /></div>"#;
-    let dom = tl::parse(input, tl::ParserOptions::default());
+    let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
     let img = dom.query_selector("img[src]").unwrap().next();
     
     println!("{:?}", img);
@@ -47,7 +49,7 @@ Iterating over the subnodes of an HTML document:
 ```rust
 fn main() {
     let input = r#"<div><img src="cool-image.png" /></div>"#;
-    let dom = tl::parse(input, tl::ParserOptions::default());
+    let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
     let img = dom.nodes()
         .iter()
         .find(|node| {
@@ -55,6 +57,37 @@ fn main() {
         });
     
     println!("{:?}", img);
+}
+```
+
+Mutating the `href` attribute of an anchor tag:
+> In a real world scenario, you would want to handle errors properly instead of unwrapping.
+```rust
+fn main() {
+  let input = r#"<div><a href="/about">About</a></div>"#;
+  let mut dom = tl::parse(input, tl::ParserOptions::default())
+    .expect("HTML string too long");
+  
+  let anchor = dom.query_selector("a[href]")
+    .expect("Failed to parse query selector")
+    .next()
+    .expect("Failed to find anchor tag");
+
+  let parser_mut = dom.parser_mut();
+
+  let anchor = anchor.get_mut(parser_mut)
+    .expect("Failed to resolve node")
+    .as_tag_mut()
+    .expect("Failed to cast Node to HTMLTag");
+
+  let attributes = anchor.attributes_mut();
+
+  attributes.get_mut("href")
+    .flatten()
+    .expect("Attribute not found or malformed")
+    .set("http://localhost/about");
+
+  assert_eq!(attributes.get("href").flatten(), Some("http://localhost/about".into()));
 }
 ```
 

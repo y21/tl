@@ -3,7 +3,7 @@ use super::{
     handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
-use crate::{bytes::Bytes, inline::vec::InlineVec};
+use crate::{bytes::Bytes, errors::ParseError, inline::vec::InlineVec};
 use crate::{stream::Stream, ParserOptions};
 use crate::{util, InnerNodeHandle};
 use std::collections::HashMap;
@@ -384,7 +384,8 @@ impl<'a> Parser<'a> {
 
     #[inline(never)]
     fn process_class(&mut self, class: &Bytes<'a>, element: NodeHandle) {
-        let raw = class.raw();
+        // TODO(y21): check if unwrap_unchecked makes a difference
+        let raw = class.as_bytes_borrowed().unwrap();
 
         let mut stream = Stream::new(raw);
 
@@ -424,12 +425,23 @@ impl<'a> Parser<'a> {
         self.tags.get(id)
     }
 
-    pub(crate) fn parse(mut self) -> Parser<'a> {
+    /// Resolves an internal Node ID obtained from a NodeHandle to a mutable Node
+    #[inline]
+    pub fn resolve_node_id_mut(&mut self, id: InnerNodeHandle) -> Option<&mut Node<'a>> {
+        self.tags.get_mut(id)
+    }
+
+    pub(crate) fn parse(mut self) -> Result<Parser<'a>, ParseError> {
+        if self.stream.len() > u32::MAX as usize {
+            return Err(ParseError::InvalidLength);
+        }
+
         while !self.stream.is_eof() {
             if let Some(node) = self.parse_single() {
                 self.ast.push(node);
             }
         }
-        self
+
+        Ok(self)
     }
 }
