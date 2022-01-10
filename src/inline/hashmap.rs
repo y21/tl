@@ -27,6 +27,16 @@ where
         self.0.len()
     }
 
+    /// Returns an iterator over the elements of this map
+    /// 
+    /// This function boxes the returned iterator because it can be either of two:
+    /// - The iterator returned by `HashMap::iter()`
+    /// - The iterator over a stack-allocated array
+    #[inline]
+    pub fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_> {
+        self.0.iter()
+    }
+
     /// If `self` is inlined, this returns the underlying raw parts that make up this `InlineHashMap`.
     ///
     /// Only the first `.1` elements are initialized.
@@ -148,6 +158,16 @@ impl<K, V, const N: usize> InlineHashMapInner<K, V, N> {
     }
 
     #[inline]
+    pub fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_> {
+        match self {
+            Self::Inline { len, data } => {
+                Box::new(unsafe { InlineHashMapIterator::new(data, *len) })
+            }
+            Self::Heap(h) => Box::new(h.iter())
+        }
+    }
+
+    #[inline]
     pub fn inline_parts_mut(&mut self) -> Option<(&mut [MaybeUninit<(K, V)>; N], usize)> {
         match self {
             Self::Heap(_) => None,
@@ -198,7 +218,7 @@ impl<K: Eq + Hash, V, const N: usize> InlineHashMapInner<K, V, N> {
         match self {
             Self::Inline { data, len } => unsafe {
                 InlineHashMapIterator::new(data, *len)
-                    .find(|(key, _)| key.eq(k))
+                    .find(|(key, _)| key.eq(&k))
                     .map(|(_, value)| value)
             },
             Self::Heap(map) => map.get(k),
@@ -325,23 +345,44 @@ impl<'a, K, V> InlineHashMapIterator<'a, K, V> {
 }
 
 impl<'a, K, V> Iterator for InlineHashMapIterator<'a, K, V> {
-    type Item = &'a (K, V);
+    type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.idx >= self.len {
             return None;
         }
 
-        let element = unsafe { &*self.array[self.idx].as_ptr() };
+        let (k, v) = unsafe { &*self.array[self.idx].as_ptr() };
         self.idx += 1;
 
-        Some(element)
+        Some((k, v))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn inlinehashmap_iter() {
+        let mut x = InlineHashMap::<String, usize, 5>::new();
+        x.insert("foo".into(), 3);
+        x.insert("bar".into(), 6);
+        x.insert("baz".into(), 7);
+        x.insert("qux".into(), 9);
+
+        let mut iter = x.iter();
+
+        // order is guaranteed as long as:
+        // - `InlineHashMap` is a stack-allocated array
+        // - `x.remove()` is never called
+
+        assert_eq!(iter.next(), Some((&"foo".into(), &3usize)));
+        assert_eq!(iter.next(), Some((&"bar".into(), &6usize)));
+        assert_eq!(iter.next(), Some((&"baz".into(), &7usize)));
+        assert_eq!(iter.next(), Some((&"qux".into(), &9usize)));
+    }
 
     #[test]
     fn inlinehashmap_remove() {

@@ -1,8 +1,14 @@
 # 0.5.0
-**⚠ This release has breaking changes**
-- Allow DOM mutation
+> **Warning: This release contains breaking changes**
+>
+> Changes annotated with `⚠` are breaking.
 - Allow `Bytes` to store owned data through `Bytes::set()`
-- `tl::parse()` now returns `Result<VDom<'a>, ParseError>`
+    - ⚠ The maximum length for `Bytes` is `u32::MAX`
+- ⚠ `tl::parse()` now returns `Result<VDom<'a>, ParseError>`
+- ⚠ `Attributes` fields are no longer public, instead use one of the provided methods
+- ⚠ `HTMLTag::inner_html()` now takes a `&Parser` and no longer directly returns the substring
+    - Node mutations to the tag or any of its subnodes means `inner_html` needs to be recomputed
+    - Consider using `HTMLTag::raw()` if you never mutate any nodes
 
 # 0.4.4
 - Parse unquoted attribute values properly (`<a href=foo>`) [#12]

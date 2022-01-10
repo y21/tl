@@ -15,7 +15,7 @@ fn inner_html() {
 
     let tag = force_as_tag(dom.children()[1].get(parser).unwrap());
 
-    assert_eq!(tag.inner_html().as_utf8_str(), "<p>test</p>");
+    assert_eq!(tag.inner_html(parser), "<p>test</p>");
 }
 
 #[test]
@@ -35,12 +35,13 @@ fn get_element_by_id_default() {
         ParserOptions::default(),
     )
     .unwrap();
+    let parser = dom.parser();
 
     let tag = dom.get_element_by_id("test").expect("Element not present");
 
     let el = force_as_tag(tag.get(dom.parser()).unwrap());
 
-    assert_eq!(el.inner_html().as_utf8_str(), "<p id=\"test\"></p>")
+    assert_eq!(el.inner_html(parser), "<p id=\"test\"></p>")
 }
 
 #[test]
@@ -50,12 +51,13 @@ fn get_element_by_id_tracking() {
         ParserOptions::default().track_ids(),
     )
     .unwrap();
+    let parser = dom.parser();
 
     let tag = dom.get_element_by_id("test").expect("Element not present");
 
     let el = force_as_tag(tag.get(dom.parser()).unwrap());
 
-    assert_eq!(el.inner_html().as_utf8_str(), "<p id=\"test\"></p>")
+    assert_eq!(el.inner_html(parser), "<p id=\"test\"></p>")
 }
 
 #[test]
@@ -222,29 +224,10 @@ fn mutate_dom() {
     let el = handle.get_mut(parser).unwrap();
     let tag = el.as_tag_mut().unwrap();
     let attr = tag.attributes_mut();
-    let bytes = attr.get_attribute_mut("src").flatten().unwrap();
+    let bytes = attr.get_mut("src").flatten().unwrap();
     bytes.set("world.png").unwrap();
 
-    assert_eq!(attr.get_attribute("src"), Some(Some("world.png".into())));
-}
-
-#[test]
-fn mutate_dom2() {
-    let input = r#"
-        <div id="u54423">Hello World</div>
-        <p>This is a paragraph</p>
-        <h1 class="x">This is a heading</h1>
-    "#;
-
-    let mut dom = parse(input, ParserOptions::default()).unwrap();
-    for node in dom.nodes_mut() {
-        if let Some(tag) = node.as_tag_mut() {
-            tag.attributes_mut()
-                .insert_attribute("test", Some("testing"));
-
-            tag.inner_html_mut().set("<b>Hello World</b>").unwrap();
-        }
-    }
+    assert_eq!(attr.get("src"), Some(Some("world.png".into())));
 }
 
 #[cfg(feature = "simd")]

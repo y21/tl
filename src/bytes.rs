@@ -135,6 +135,13 @@ impl<'a> Bytes<'a> {
         String::from_utf8_lossy(self.as_bytes())
     }
 
+    /// Tries to convert the inner data to a `&str`, without allocating in the case
+    /// that the inner data is not valid UTF8
+    #[inline]
+    pub fn try_as_utf8_str(&self) -> Option<&str> {
+        std::str::from_utf8(self.as_bytes()).ok()
+    }
+
     /// Returns the raw data wrapped by this struct
     #[inline]
     pub fn as_bytes(&self) -> &[u8] {

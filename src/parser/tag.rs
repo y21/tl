@@ -9,15 +9,18 @@ use super::{handle::NodeHandle, Parser};
 const INLINED_ATTRIBUTES: usize = 4;
 const INLINED_SUBNODES: usize = 4;
 
+/// The type of map for "raw" attributes
+pub type RawAttributesMap<'a> = InlineHashMap<Bytes<'a>, Option<Bytes<'a>>, INLINED_ATTRIBUTES>;
+
 /// Stores all attributes of an HTML tag, as well as additional metadata such as `id` and `class`
 #[derive(Debug, Clone)]
 pub struct Attributes<'a> {
     /// Raw attributes (maps attribute key to attribute value)
-    pub raw: InlineHashMap<Bytes<'a>, Option<Bytes<'a>>, INLINED_ATTRIBUTES>,
+    pub(crate) raw: RawAttributesMap<'a>,
     /// The ID of this HTML element, if present
-    pub id: Option<Bytes<'a>>,
+    pub(crate) id: Option<Bytes<'a>>,
     /// A list of class names of this HTML element, if present
-    pub class: Option<Bytes<'a>>,
+    pub(crate) class: Option<Bytes<'a>>,
 }
 
 impl<'a> Attributes<'a> {
@@ -42,17 +45,20 @@ impl<'a> Attributes<'a> {
         raw
     }
 
+    /// Checks whether this collection of attributes is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Checks whether a given string is in the class names list
     pub fn is_class_member<B: AsRef<[u8]>>(&self, member: B) -> bool {
-        self.class.as_ref().map_or(false, |b| {
-            b.as_utf8_str()
-                .split_whitespace()
-                .any(|x| x.as_bytes() == member.as_ref())
-        })
+        self.class_iter().map_or(false, |mut i| i.any(|s| s.as_bytes() == member.as_ref()))
     }
 
     /// Checks whether this attributes collection contains a given key and returns its value
-    pub fn get_attribute<B>(&self, key: B) -> Option<Option<Bytes<'a>>>
+    /// 
+    /// Attributes that exist in this tag but have no value set will have their inner Option set to None
+    pub fn get<B>(&self, key: B) -> Option<Option<Bytes<'a>>>
     where
         B: Into<Bytes<'a>>,
     {
@@ -66,7 +72,7 @@ impl<'a> Attributes<'a> {
     }
 
     /// Checks whether this attributes collection contains a given key and returns its value
-    pub fn get_attribute_mut<B>(&mut self, key: B) -> Option<Option<&mut Bytes<'a>>>
+    pub fn get_mut<B>(&mut self, key: B) -> Option<Option<&mut Bytes<'a>>>
     where
         B: Into<Bytes<'a>>,
     {
@@ -80,7 +86,7 @@ impl<'a> Attributes<'a> {
     }
 
     /// Inserts a new attribute into this attributes collection
-    pub fn insert_attribute<B>(&mut self, key: B, value: Option<B>)
+    pub fn insert<B>(&mut self, key: B, value: Option<B>)
     where
         B: Into<Bytes<'a>>,
     {
@@ -92,6 +98,48 @@ impl<'a> Attributes<'a> {
             b"class" => self.class = value,
             _ => self.raw.insert(key, value),
         };
+    }
+
+    /// Returns an iterator `(attribute_key, attribute_value)` over the attributes of this `HTMLTag`
+    pub fn iter(&self) -> impl Iterator<Item = (Cow<str>, Option<Cow<str>>)> + '_ {
+        self.raw.iter()
+            .map(|(k, v)| {
+                let k = k.as_utf8_str();
+                let v = v.as_ref().map(|x| x.as_utf8_str());
+
+                (Some(k), v)
+            })
+            .chain([
+                (self.id.is_some().then(|| Cow::Borrowed("id")), self.id.as_ref().map(|x| x.as_utf8_str())),
+                (self.class.is_some().then(|| Cow::Borrowed("class")), self.class.as_ref().map(|x| x.as_utf8_str())),
+            ])
+            .flat_map(|(k, v)| k.map(|k| (k, v)))
+    }
+
+    /// Returns the `id` attribute of this HTML tag, if present
+    pub fn id(&self) -> Option<&Bytes<'a>> {
+        self.id.as_ref()
+    }
+
+    /// Returns the `class` attribute of this HTML tag, if present
+    pub fn class(&self) -> Option<&Bytes<'a>> {
+        self.id.as_ref()
+    }
+
+    /// Returns an iterator over all of the class members
+    pub fn class_iter(&self) -> Option<impl Iterator<Item = &'_ str> + '_> {
+        self.class.as_ref().and_then(Bytes::try_as_utf8_str).map(str::split_ascii_whitespace)
+    }
+
+    /// Returns the underlying raw map for attributes
+    /// 
+    /// ## A note on stability
+    /// It is not guaranteed for the returned map to include all attributes.
+    /// Some attributes may be stored in `Attributes` itself and not in the raw map.
+    /// For that reason you should prefer to call methods on `Attributes` directly,
+    /// i.e. `Attributes::get()` to lookup an attribute by its key.
+    pub fn unstable_raw(&self) -> &RawAttributesMap<'a> {
+        &self.raw
     }
 }
 
@@ -122,53 +170,80 @@ impl<'a> HTMLTag<'a> {
     }
 
     /// Returns an iterator over subnodes ("children") of this HTML tag
+    #[inline]
     pub fn children(&self) -> impl Iterator<Item = NodeHandle> + '_ {
         self._children.iter().copied()
     }
 
     /// Returns the name of this HTML tag
+    #[inline]
     pub fn name(&self) -> Bytes<'a> {
         self._name.clone()
     }
 
     /// Returns a mutable reference to the name of this HTML tag
+    #[inline]
     pub fn name_mut(&mut self) -> &mut Bytes<'a> {
         &mut self._name
     }
 
     /// Returns attributes of this HTML tag
+    #[inline]
     pub fn attributes(&self) -> &Attributes<'a> {
         &self._attributes
     }
 
     /// Returns a mutable reference to the attributes of this HTML tag
+    #[inline]
     pub fn attributes_mut(&mut self) -> &mut Attributes<'a> {
         &mut self._attributes
     }
 
     /// Returns the contained markup
     /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
-    pub fn inner_html(&self) -> Bytes<'a> {
-        self._raw.clone()
+    pub fn inner_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
+        let mut inner_html = format!("<{}", self._name.as_utf8_str());
+
+        #[inline]
+        fn write_attribute(dest: &mut String, k: Cow<str>, v: Option<Cow<str>>) {
+            dest.push(' ');
+
+            dest.push_str(&k);
+
+            if let Some(value) = v {
+                dest.push_str("=\"");
+                dest.push_str(&value);
+                dest.push('"');
+            }
+        }
+
+        let attr = self.attributes();
+
+        for (k, v) in attr.iter() {
+            write_attribute(&mut inner_html, k, v);
+        }
+
+        inner_html.push('>');
+
+        for handle in self.children() {
+            let node = handle.get(parser).unwrap();
+            inner_html.push_str(&node.inner_html(parser));
+        }
+
+        inner_html.push_str("</");
+        inner_html.push_str(&self._name.as_utf8_str());
+        inner_html.push('>');
+
+        inner_html
     }
 
-    /// Returns a mutable reference to the contained markup
-    ///
-    /// **Note:** Mutating this does *not* re-compute the HTML representation of this tag.
-    ///
-    /// # Example
-    /// ```
-    /// # use tl::*;
-    /// let mut dom = parse("<div>Hello</div>", ParserOptions::default()).unwrap();
-    /// let div = dom.query_selector("div").unwrap().next().unwrap();
-    /// let parser = dom.parser_mut();
-    ///
-    /// let element = div.get_mut(parser).unwrap().as_tag_mut().unwrap();
-    /// element.inner_html_mut().set("<div>World</div>".as_bytes());
-    /// assert_eq!(element.inner_html().as_bytes(), b"<div>World</div>");
-    /// ```
-    pub fn inner_html_mut(&mut self) -> &mut Bytes<'a> {
-        &mut self._raw
+    /// Returns the raw HTML of this tag. 
+    /// This is a cheaper version of `HTMLTag::inner_html` if you never mutate any nodes.
+    /// 
+    /// **Note:** Mutating this tag does *not* re-compute the HTML representation of this tag.
+    /// This simply returns a reference to the substring.
+    pub fn raw(&self) -> &Bytes<'a> {
+        &self._raw
     }
 
     /// Returns the contained text of this element, excluding any markup
@@ -251,11 +326,11 @@ impl<'a> Node<'a> {
     }
 
     /// Returns the inner HTML of this node
-    pub fn inner_html(&self) -> Bytes<'a> {
+    pub fn inner_html<'s>(&'s self, parser: &Parser<'a>) -> Cow<'s, str> {
         match self {
-            Node::Comment(c) => c.clone(),
-            Node::Raw(r) => r.clone(),
-            Node::Tag(t) => t.inner_html(),
+            Node::Comment(c) => c.as_utf8_str(),
+            Node::Raw(r) => r.as_utf8_str(),
+            Node::Tag(t) => Cow::Owned(t.inner_html(parser)),
         }
     }
 

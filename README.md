@@ -82,12 +82,12 @@ fn main() {
 
   let attributes = anchor.attributes_mut();
 
-  attributes.get_attribute_mut("href")
+  attributes.get_mut("href")
     .flatten()
     .expect("Attribute not found or malformed")
     .set("http://localhost/about");
 
-  assert_eq!(attributes.get_attribute("href").flatten(), Some("http://localhost/about".into()));
+  assert_eq!(attributes.get("href").flatten(), Some("http://localhost/about".into()));
 }
 ```
 
