@@ -418,6 +418,16 @@ impl<'a> Node<'a> {
     /// Tries to coerce this node into a raw text node, returning the text
     ///
     /// "Raw text nodes" are nodes that are not HTML tags, but just text
+    pub fn as_raw(&self) -> Option<&Bytes<'a>> {
+        match self {
+            Self::Raw(r) => Some(r),
+            _ => None,
+        }
+    }
+
+    /// Tries to coerce this node into a mutable raw text node, returning the text
+    ///
+    /// "Raw text nodes" are nodes that are not HTML tags, but just text
     pub fn as_raw_mut(&mut self) -> Option<&mut Bytes<'a>> {
         match self {
             Self::Raw(r) => Some(r),

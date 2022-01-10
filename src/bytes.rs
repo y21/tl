@@ -6,6 +6,8 @@ use std::{
     mem::ManuallyDrop,
 };
 
+use crate::errors::SetBytesError;
+
 /// A storage type for raw bytes, used by the parser
 #[derive(Eq, PartialOrd, Ord)]
 pub struct Bytes<'a> {
@@ -255,12 +257,6 @@ impl IntoOwnedBytes for String {
     fn into_bytes(self) -> Box<[u8]> {
         self.into_bytes().into()
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum SetBytesError {
-    /// The length of the given data would overflow a `u32`
-    LengthOverflow,
 }
 
 impl Drop for BytesInner {
