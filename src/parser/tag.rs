@@ -1,16 +1,20 @@
 use crate::{
     inline::{hashmap::InlineHashMap, vec::InlineVec},
-    Bytes,
+    queryselector::{self, QuerySelectorIterator},
+    Bytes, InnerNodeHandle,
 };
 use std::borrow::Cow;
 
 use super::{handle::NodeHandle, Parser};
 
-const INLINED_ATTRIBUTES: usize = 4;
-const INLINED_SUBNODES: usize = 4;
+const INLINED_ATTRIBUTES: usize = 2;
+const INLINED_SUBNODES: usize = 2;
 
 /// The type of map for "raw" attributes
 pub type RawAttributesMap<'a> = InlineHashMap<Bytes<'a>, Option<Bytes<'a>>, INLINED_ATTRIBUTES>;
+
+/// The type of vector for children of an HTML tag
+pub type RawChildren = InlineVec<NodeHandle, INLINED_SUBNODES>;
 
 /// Stores all attributes of an HTML tag, as well as additional metadata such as `id` and `class`
 #[derive(Debug, Clone)]
@@ -59,16 +63,16 @@ impl<'a> Attributes<'a> {
     /// Checks whether this attributes collection contains a given key and returns its value
     ///
     /// Attributes that exist in this tag but have no value set will have their inner Option set to None
-    pub fn get<B>(&self, key: B) -> Option<Option<Bytes<'a>>>
+    pub fn get<B>(&self, key: B) -> Option<Option<&Bytes<'a>>>
     where
         B: Into<Bytes<'a>>,
     {
         let key: Bytes = key.into();
 
         match key.as_bytes() {
-            b"id" => self.id.clone().map(Some),
-            b"class" => self.class.clone().map(Some),
-            _ => self.raw.get(&key).cloned(),
+            b"id" => self.id.as_ref().map(Some),
+            b"class" => self.class.as_ref().map(Some),
+            _ => self.raw.get(&key).map(|x| x.as_ref()),
         }
     }
 
@@ -159,7 +163,7 @@ impl<'a> Attributes<'a> {
 pub struct HTMLTag<'a> {
     pub(crate) _name: Bytes<'a>,
     pub(crate) _attributes: Attributes<'a>,
-    pub(crate) _children: InlineVec<NodeHandle, INLINED_SUBNODES>,
+    pub(crate) _children: RawChildren,
     pub(crate) _raw: Bytes<'a>,
 }
 
@@ -180,16 +184,16 @@ impl<'a> HTMLTag<'a> {
         }
     }
 
-    /// Returns an iterator over subnodes ("children") of this HTML tag
+    /// Returns a wrapper around the children of this HTML tag
     #[inline]
-    pub fn children(&self) -> impl Iterator<Item = NodeHandle> + '_ {
-        self._children.iter().copied()
+    pub fn children(&self) -> Children<'a, '_> {
+        Children(self)
     }
 
     /// Returns the name of this HTML tag
     #[inline]
-    pub fn name(&self) -> Bytes<'a> {
-        self._name.clone()
+    pub fn name(&self) -> &Bytes<'a> {
+        &self._name
     }
 
     /// Returns a mutable reference to the name of this HTML tag
@@ -241,7 +245,7 @@ impl<'a> HTMLTag<'a> {
 
         inner_html.push('>');
 
-        for handle in self.children() {
+        for &handle in self.children().top().iter() {
             let node = handle.get(parser).unwrap();
             inner_html.push_str(&node.inner_html(parser));
         }
@@ -301,6 +305,53 @@ impl<'a> HTMLTag<'a> {
         Cow::Owned(s)
     }
 
+    /// Tries to parse the query selector and returns an iterator over elements that match the given query selector.
+    ///
+    /// # Example
+    /// ```
+    /// let dom = tl::parse(r#"
+    ///     <div class="x">
+    ///     <div class="y">
+    ///       <div class="z">MATCH</div>
+    ///       <div class="z">MATCH</div>
+    ///       <div class="z">MATCH</div>
+    ///     </div>
+    ///   </div>
+    ///   <div class="z">NO MATCH</div>
+    ///   <div class="z">NO MATCH</div>
+    ///   <div class="z">NO MATCH</div>
+    /// "#, Default::default()).unwrap();
+    /// let parser = dom.parser();
+    ///
+    /// let outer = dom
+    ///     .get_elements_by_class_name("y")
+    ///     .next()
+    ///     .unwrap()
+    ///     .get(parser)
+    ///     .unwrap()
+    ///     .as_tag()
+    ///     .unwrap();
+    ///
+    /// let inner_z = outer.query_selector(parser, ".z").unwrap();
+    ///
+    /// assert_eq!(inner_z.clone().count(), 3);
+    ///
+    /// for handle in inner_z {
+    ///     let node = handle.get(parser).unwrap().as_tag().unwrap();
+    ///     assert_eq!(node.inner_text(parser), "MATCH");
+    /// }
+    ///
+    /// ```
+    pub fn query_selector<'b>(
+        &'b self,
+        parser: &'b Parser<'a>,
+        selector: &'b str,
+    ) -> Option<QuerySelectorIterator<'a, 'b, Self>> {
+        let selector = crate::parse_query_selector(selector)?;
+        let iter = queryselector::QuerySelectorIterator::new(selector, parser, self);
+        Some(iter)
+    }
+
     /// Calls the given closure with each tag as parameter
     ///
     /// The closure must return a boolean, indicating whether it should stop iterating
@@ -317,6 +368,112 @@ impl<'a> HTMLTag<'a> {
             }
         }
         None
+    }
+}
+
+/// A thin wrapper around the children of [`HTMLTag`]
+#[derive(Debug, Clone)]
+pub struct Children<'a, 'b>(&'b HTMLTag<'a>);
+
+impl<'a, 'b> Children<'a, 'b> {
+    /// Returns the topmost, direct children of this tag.
+    ///
+    /// # Example
+    /// ```
+    /// let dom = tl::parse(r#"
+    ///     <div id="a">
+    ///         <div id="b">
+    ///             <span>Hello</span>
+    ///             <span>World</span>
+    ///             <span>.</span>
+    ///         </div>
+    ///     </div>
+    /// "#, Default::default()).unwrap();
+    ///
+    /// let a = dom.get_element_by_id("a")
+    ///     .unwrap()
+    ///     .get(dom.parser())
+    ///     .unwrap()
+    ///     .as_tag()
+    ///     .unwrap();
+    ///
+    /// // Calling this function on the first div tag (#a) will return a slice containing 3 elements:
+    /// // - whitespaces around (before and after) div#b
+    /// // - div#b itself
+    /// // It does **not** contain the inner span tags
+    /// assert_eq!(a.children().top().len(), 3);
+    /// ```
+    #[inline]
+    pub fn top(&self) -> &RawChildren {
+        &self.0._children
+    }
+
+    /// Returns the starting boundary of the children of this tag.
+    #[inline]
+    pub fn start(&self) -> Option<InnerNodeHandle> {
+        self.0._children.get(0).map(NodeHandle::get_inner)
+    }
+
+    /// Returns the ending boundary of the children of this tag.
+    pub fn end(&self, parser: &Parser<'a>) -> Option<InnerNodeHandle> {
+        find_last_node_handle(self.0, parser).map(|h| h.get_inner())
+    }
+
+    /// Returns the (start, end) boundaries of the children of this tag.
+    #[inline]
+    pub fn boundaries(&self, parser: &Parser<'a>) -> Option<(InnerNodeHandle, InnerNodeHandle)> {
+        self.start().zip(self.end(parser))
+    }
+
+    /// Returns a slice containing all of the children of this [`HTMLTag`],
+    /// including all subnodes of the children.
+    ///
+    /// The difference between `top()` and `all()` is the same as `VDom::children()` and `VDom::nodes()`
+    ///
+    /// # Example
+    /// ```
+    /// let dom = tl::parse(r#"
+    ///     <div id="a"><div id="b"><span>Hello</span><span>World</span><span>!</span></div></div>
+    /// "#, Default::default()).unwrap();
+    ///
+    /// let a = dom.get_element_by_id("a")
+    ///     .unwrap()
+    ///     .get(dom.parser())
+    ///     .unwrap()
+    ///     .as_tag()
+    ///     .unwrap();
+    ///
+    /// // Calling this function on the first div tag (#a) will return a slice containing all of the subnodes:
+    /// // - div#b
+    /// // - span
+    /// // - Hello
+    /// // - span
+    /// // - World
+    /// // - span
+    /// // - !
+    /// assert_eq!(a.children().all(dom.parser()).len(), 7);
+    /// ```
+    pub fn all(&self, parser: &'b Parser<'a>) -> &'b [Node<'a>] {
+        self.boundaries(parser)
+            .map(|(start, end)| &parser.tags[start as usize..=end as usize])
+            .unwrap_or(&[])
+    }
+}
+
+/// Attempts to find the very last node handle that is contained in the given tag
+fn find_last_node_handle<'a>(tag: &HTMLTag<'a>, parser: &Parser<'a>) -> Option<NodeHandle> {
+    let last_handle = tag._children.as_slice().last().copied()?;
+
+    let child = last_handle
+        .get(parser)
+        .expect("Failed to get child node, please open a bug report") // this shouldn't happen
+        .as_tag();
+
+    if let Some(child) = child {
+        // Recursively call this function to get to the innermost node
+        find_last_node_handle(child, parser).or(Some(last_handle))
+    } else {
+        Some(last_handle)
     }
 }
 
@@ -351,7 +508,7 @@ impl<'a> Node<'a> {
     }
 
     /// Returns an iterator over subnodes ("children") of this HTML tag, if this is a tag
-    pub fn children(&self) -> Option<impl Iterator<Item = NodeHandle> + '_> {
+    pub fn children(&self) -> Option<Children<'a, '_>> {
         match self {
             Node::Tag(t) => Some(t.children()),
             _ => None,
@@ -367,7 +524,7 @@ impl<'a> Node<'a> {
         F: FnMut(&Node<'a>) -> bool,
     {
         if let Some(children) = self.children() {
-            for id in children {
+            for &id in children.top().iter() {
                 let node = id.get(parser).unwrap();
 
                 if f(node) {

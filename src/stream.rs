@@ -13,12 +13,6 @@ impl<'a, T: Copy> Stream<'a, T> {
     pub fn current_cpy(&self) -> Option<T> {
         self.data.get(self.idx).copied()
     }
-
-    /// Returns a copy of the current element without doing any boundary checks
-    #[inline]
-    pub unsafe fn current_cpy_unchecked(&self) -> T {
-        *self.data.get_unchecked(self.idx)
-    }
 }
 
 impl<'a, T: Eq + Copy> Stream<'a, T> {
@@ -66,14 +60,6 @@ impl<'a, T> Stream<'a, T> {
         &self.data
     }
 
-    /// Increments the index and returns the next element
-    pub fn next(&mut self) -> Option<&T> {
-        self.data.get(self.idx + 1).map(|c| {
-            self.advance();
-            c
-        })
-    }
-
     #[inline]
     pub fn advance(&mut self) {
         self.idx += 1;
@@ -90,12 +76,6 @@ impl<'a, T> Stream<'a, T> {
         self.data.get(self.idx)
     }
 
-    /// Returns the current element without doing any boundary checks
-    #[inline]
-    pub unsafe fn current_unchecked(&self) -> &T {
-        &self.data.get_unchecked(self.idx)
-    }
-
     /// Checks whether the stream has reached the end
     #[inline]
     pub fn is_eof(&self) -> bool {
@@ -106,12 +86,6 @@ impl<'a, T> Stream<'a, T> {
     #[inline]
     pub fn slice(&self, from: usize, to: usize) -> &'a [T] {
         &self.data[from..to]
-    }
-
-    /// Returns a subslice of this stream without doing any boundary checks
-    #[inline]
-    pub unsafe fn slice_unchecked(&self, from: usize, to: usize) -> &'a [T] {
-        self.data.get_unchecked(from..to)
     }
 
     /// Returns a subslice of this stream but also checks stream length
@@ -125,11 +99,5 @@ impl<'a, T> Stream<'a, T> {
     #[inline]
     pub fn slice_len(&self, from: usize, len: usize) -> &'a [T] {
         self.slice_checked(from, self.idx + len)
-    }
-
-    /// Same as slice, but uses the current index + 1 as `to`
-    #[inline]
-    pub fn slice_from(&self, from: usize) -> &'a [T] {
-        self.slice_checked(from, self.idx)
     }
 }

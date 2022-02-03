@@ -28,7 +28,7 @@ where
     }
 
     /// Returns an iterator over the elements of this map
-    /// 
+    ///
     /// This function boxes the returned iterator because it can be either of two:
     /// - The iterator returned by `HashMap::iter()`
     /// - The iterator over a stack-allocated array
@@ -85,7 +85,7 @@ where
         self.0.get_mut(key)
     }
 
-    /// Returns a reference to the value corresponding to the key.
+    /// Checks whether the map contains a value for the specified key.
     #[inline]
     pub fn contains_key(&self, key: &K) -> bool {
         self.0.contains_key(key)
@@ -163,7 +163,7 @@ impl<K, V, const N: usize> InlineHashMapInner<K, V, N> {
             Self::Inline { len, data } => {
                 Box::new(unsafe { InlineHashMapIterator::new(data, *len) })
             }
-            Self::Heap(h) => Box::new(h.iter())
+            Self::Heap(h) => Box::new(h.iter()),
         }
     }
 
@@ -362,7 +362,6 @@ impl<'a, K, V> Iterator for InlineHashMapIterator<'a, K, V> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn inlinehashmap_iter() {

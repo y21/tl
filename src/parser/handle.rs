@@ -3,13 +3,18 @@ use crate::Node;
 use super::Parser;
 
 /// The inner type of a NodeHandle, used to represent an index into the tags table
-pub type InnerNodeHandle = usize;
+pub type InnerNodeHandle = u32;
 
-/// An external handle to a HTML node, originally obtained from a [Parser]
+/// A detached, external handle to a HTML node, originally obtained from a [Parser]
 ///
 /// It contains an identifier that uniquely identifies an HTML node.
 /// In particular, it is an index into the global HTML tag table managed by the [`Parser`].
 /// To get a [`Node`] out of a [`NodeHandle`], call `NodeHandle::get()`
+///
+/// A common way to model self referential/recursive graphs is to have one "global" vector
+/// of nodes, and store indices into the vector instead of references.
+/// In the case of tl, the "global" HTML tag vector is stored in the [`Parser`] and [`NodeHandle`] represents the index.
+/// Because [`NodeHandle`] is only an index and completely detached from anything, you need to pass a parser to `NodeHandle::get()`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct NodeHandle(InnerNodeHandle);

@@ -33,6 +33,20 @@ enum BytesInner {
     Owned(*mut u8, u32),
 }
 
+impl<'a> PartialEq<str> for Bytes<'a> {
+    #[inline]
+    fn eq(&self, other: &str) -> bool {
+        self == other.as_bytes()
+    }
+}
+
+impl<'a> PartialEq<[u8]> for Bytes<'a> {
+    #[inline]
+    fn eq(&self, other: &[u8]) -> bool {
+        self.as_bytes() == other
+    }
+}
+
 impl<'a> PartialEq for Bytes<'a> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {

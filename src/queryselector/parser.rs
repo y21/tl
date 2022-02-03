@@ -2,18 +2,20 @@ use crate::{stream::Stream, util};
 
 use super::Selector;
 
+/// A query selector parser
 pub struct Parser<'a> {
-    pub stream: Stream<'a, u8>,
+    stream: Stream<'a, u8>,
 }
 
 impl<'a> Parser<'a> {
+    /// Creates a new query selector parser
     pub fn new(input: &'a [u8]) -> Self {
         Self {
             stream: Stream::new(input),
         }
     }
 
-    pub fn skip_whitespaces(&mut self) -> bool {
+    fn skip_whitespaces(&mut self) -> bool {
         let has_whitespace = self.stream.expect_and_skip(b' ').is_some();
         while !self.stream.is_eof() {
             if self.stream.expect_and_skip(b' ').is_none() {
@@ -23,7 +25,7 @@ impl<'a> Parser<'a> {
         has_whitespace
     }
 
-    pub fn read_identifier(&mut self) -> &'a [u8] {
+    fn read_identifier(&mut self) -> &'a [u8] {
         let start = self.stream.idx;
 
         while !self.stream.is_eof() {
@@ -38,7 +40,7 @@ impl<'a> Parser<'a> {
         self.stream.slice(start, self.stream.idx)
     }
 
-    pub fn parse_combinator(&mut self, left: Selector<'a>) -> Option<Selector<'a>> {
+    fn parse_combinator(&mut self, left: Selector<'a>) -> Option<Selector<'a>> {
         let has_whitespaces = self.skip_whitespaces();
 
         let tok = if let Some(tok) = self.stream.current_cpy() {
@@ -72,7 +74,7 @@ impl<'a> Parser<'a> {
         Some(combinator)
     }
 
-    pub fn parse_attribute(&mut self) -> Option<Selector<'a>> {
+    fn parse_attribute(&mut self) -> Option<Selector<'a>> {
         let attribute = self.read_identifier();
         let ty = match self.stream.current_cpy() {
             Some(b']') => {
@@ -103,6 +105,7 @@ impl<'a> Parser<'a> {
         Some(ty)
     }
 
+    /// Parses a full selector
     pub fn selector(&mut self) -> Option<Selector<'a>> {
         self.skip_whitespaces();
         let tok = self.stream.current_cpy()?;

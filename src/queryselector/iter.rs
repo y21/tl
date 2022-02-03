@@ -1,36 +1,59 @@
-use crate::{NodeHandle, VDom};
+use std::marker::PhantomData;
 
-use super::Selector;
+use crate::{NodeHandle, Parser};
 
-pub struct QuerySelectorIterator<'a, 'b> {
+use super::{iterable::QueryIterable, Selector};
+
+/// A query selector iterator that yields matching HTML nodes
+pub struct QuerySelectorIterator<'a, 'b, Q: QueryIterable<'a>> {
     selector: Selector<'b>,
-    dom: &'b VDom<'a>,
+    collection: &'b Q,
+    parser: &'b Parser<'a>,
     index: usize,
+    len: usize,
+    _a: PhantomData<&'a ()>,
 }
 
-impl<'a, 'b> QuerySelectorIterator<'a, 'b> {
-    pub fn new(selector: Selector<'b>, dom: &'b VDom<'a>) -> Self {
+impl<'a, 'b, Q: QueryIterable<'a>> Clone for QuerySelectorIterator<'a, 'b, Q> {
+    fn clone(&self) -> Self {
         Self {
-            selector,
-            dom,
-            index: 0,
+            selector: self.selector.clone(),
+            collection: self.collection,
+            parser: self.parser,
+            index: self.index,
+            len: self.len,
+            _a: PhantomData,
         }
     }
 }
 
-impl<'a, 'b> Iterator for QuerySelectorIterator<'a, 'b> {
+impl<'a, 'b, Q: QueryIterable<'a>> QuerySelectorIterator<'a, 'b, Q> {
+    /// Creates a new query selector iterator
+    pub fn new(selector: Selector<'b>, parser: &'b Parser<'a>, collection: &'b Q) -> Self {
+        Self {
+            selector,
+            collection,
+            index: 0,
+            len: collection.len(parser),
+            parser,
+            _a: PhantomData,
+        }
+    }
+}
+
+impl<'a, 'b, Q: QueryIterable<'a>> Iterator for QuerySelectorIterator<'a, 'b, Q> {
     type Item = NodeHandle;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let parser = self.dom.parser();
-        let nodes = parser.tags.iter().enumerate().skip(self.index);
-
-        for (idx, node) in nodes {
+        while self.index < self.len {
+            let node = self.collection.get(self.parser, self.index);
             self.index += 1;
-            let matches = self.selector.matches(self.dom, node);
+            if let Some((node, id)) = node {
+                let matches = self.selector.matches(node);
 
-            if matches {
-                return Some(NodeHandle::new(idx));
+                if matches {
+                    return Some(id);
+                }
             }
         }
 
