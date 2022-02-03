@@ -9,6 +9,7 @@ pub struct InlineVec<T, const N: usize>(InlineVecInner<T, N>);
 
 impl<T, const N: usize> InlineVec<T, N> {
     /// Creates a new InlineVec
+    #[inline]
     pub(crate) fn new() -> Self {
         Self(InlineVecInner::new())
     }

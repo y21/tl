@@ -13,18 +13,11 @@ mod flags {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ParserOptions {
     flags: u8,
-    max_depth: usize,
 }
-
-// some reasonable default max depth
-const MAX_DEFAULT_DEPTH: usize = 250;
 
 impl Default for ParserOptions {
     fn default() -> Self {
-        Self {
-            flags: 0,
-            max_depth: MAX_DEFAULT_DEPTH,
-        }
+        Self { flags: 0 }
     }
 }
 
@@ -88,27 +81,12 @@ impl ParserOptions {
         self.has_flag(flags::TRACK_CLASSES)
     }
 
-    /// Returns the maximum depth of the HTML parser
-    #[inline]
-    pub fn max_depth(&self) -> usize {
-        self.max_depth
-    }
-
-    /// Sets the maximum recursion depth this HTML parser is allowed to take
-    ///
-    /// By default, this is set to a reasonably small value to not blow up the stack.
-    #[inline]
-    pub fn set_max_depth(mut self, depth: usize) -> Self {
-        self.max_depth = depth;
-        self
-    }
-
     /// Returns whether the parser is tracking HTML Tag IDs or classes (previously enabled by a call to `track_ids()` or `track_classes()`).
     #[inline]
     pub fn is_tracking(&self) -> bool {
         // for now we can just check if any bit is set, may or may not lead to better codegen than two cmps
         // this must be changed in some way if we ever add more flags
         // self.is_tracking_ids() || self.is_tracking_classes()
-        self.flags > 0
+        self.flags != 0
     }
 }

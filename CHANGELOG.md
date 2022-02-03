@@ -1,7 +1,28 @@
+Changes annotated with `⚠` are breaking.
+
+# 0.6.0
+> **Warning: This release contains breaking changes**
+- ⚠ Removed deprecated method `VDom::find_node`
+    - Alternative: use `VDom::nodes().iter().find(...)` instead
+- ⚠ `Attributes::get()` now returns a reference to `Bytes` instead of cloning.
+    - Prior to this version, it wasn't necessary to return a reference as the
+      `Bytes` type was just an immutable `&[u8]`. Now it can hold owned data.
+- ⚠ `HTMLTag::children()` no longer returns an iterator, and instead returns a wrapper struct around the children of the HTML tag.
+    This wrapper struct makes it easy to obtain direct children of the tag (`Children::top()`),
+    or all children (including their children, etc...) (`Children::all()`).
+- ⚠ `Node::children()` no longer returns an iterator (see above).
+- ⚠ `HTMLTag::name()` now returns a reference to `Bytes` instead of cloning (see above).
+- Ability to create/parse query selectors independent of any parser (`tl::parse_query_selector`)
+- Ability to reuse query selectors
+- Ability to apply query selectors on `HTMLTag`s (see [#18](https://github.com/y21/tl/issues/18))
+- `queryselector` module is now public
+- `InnerNodeHandle` is now u32
+- Remove unused `max_depth` parser option
+- Add convenience `PartialEq<str>` and `PartialEq<[u8]>` impls for Bytes
+
+
 # 0.5.0
 > **Warning: This release contains breaking changes**
->
-> Changes annotated with `⚠` are breaking.
 - Allow `Bytes` to store owned data through `Bytes::set()`
     - ⚠ The maximum length for `Bytes` is `u32::MAX`
 - ⚠ `tl::parse()` now returns `Result<VDom<'a>, ParseError>`

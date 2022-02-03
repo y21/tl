@@ -3,7 +3,7 @@ use super::{
     handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
-use crate::{bytes::Bytes, errors::ParseError, inline::vec::InlineVec};
+use crate::{bytes::Bytes, inline::vec::InlineVec, ParseError};
 use crate::{stream::Stream, ParserOptions};
 use crate::{util, InnerNodeHandle};
 use std::collections::HashMap;
@@ -27,25 +27,21 @@ pub enum HTMLVersion {
     /// Frameset HTML 4.01:
     FramesetHTML401,
 }
-
 /// The main HTML parser
 ///
 /// Users of this library are not supposed to directly construct this struct.
 /// Instead, users must call `tl::parse()` and use the returned `VDom`.
 #[derive(Debug)]
 pub struct Parser<'a> {
-    /// Recursion depth for parsing tags
-    ///
-    /// We keep track of recursion depth manually to avoid blowing up the stack.
-    pub(crate) depth: usize,
+    /// The inner stream that is used to iterate through the HTML source
+    pub(crate) stream: Stream<'a, u8>,
+    pub(crate) stack: Vec<NodeHandle>,
     /// Specified options for this HTML parser
     pub(crate) options: ParserOptions,
     /// A global collection of all HTML tags that appear in the source code
     ///
     /// HTML Nodes contain indicies into this vector
     pub(crate) tags: Tree<'a>,
-    /// The inner stream that is used to iterate through the HTML source
-    pub(crate) stream: Stream<'a, u8>,
     /// The topmost HTML nodes
     pub(crate) ast: Vec<NodeHandle>,
     /// A HashMap that maps Tag ID to a Node ID
@@ -59,6 +55,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub(crate) fn new(input: &str, options: ParserOptions) -> Parser {
         Parser {
+            stack: Vec::with_capacity(4),
             options,
             tags: Vec::new(),
             stream: Stream::new(input.as_bytes()),
@@ -66,23 +63,23 @@ impl<'a> Parser<'a> {
             ids: HashMap::new(),
             classes: HashMap::new(),
             version: None,
-            depth: 0,
         }
     }
 
     #[inline(always)]
     fn register_tag(&mut self, node: Node<'a>) -> NodeHandle {
         self.tags.push(node);
-        NodeHandle::new(self.tags.len() - 1)
+        NodeHandle::new((self.tags.len() - 1) as u32)
     }
 
+    #[inline(always)]
     fn skip_whitespaces(&mut self) {
         self.read_while2(b' ', b'\n');
     }
 
     fn read_to(&mut self, needle: u8) -> &'a [u8] {
         let start = self.stream.idx;
-        let bytes = unsafe { self.stream.data().get_unchecked(start..) };
+        let bytes = &self.stream.data()[start..];
 
         #[cfg(feature = "simd")]
         let end = util::find_fast(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
@@ -91,12 +88,12 @@ impl<'a> Parser<'a> {
         let end = util::find_slow(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
-        unsafe { self.stream.slice_unchecked(start, start + end) }
+        self.stream.slice(start, start + end)
     }
 
     fn read_to4(&mut self, needle: [u8; 4]) -> &'a [u8] {
         let start = self.stream.idx;
-        let bytes = unsafe { self.stream.data().get_unchecked(start..) };
+        let bytes = &self.stream.data()[start..];
 
         #[cfg(feature = "simd")]
         let end = util::find_fast_4(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
@@ -105,16 +102,18 @@ impl<'a> Parser<'a> {
         let end = util::find_multi_slow(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
-        unsafe { self.stream.slice_unchecked(start, start + end) }
+        self.stream.slice(start, start + end)
     }
 
-    fn read_while2(&mut self, needle1: u8, needle2: u8) {
-        while !self.stream.is_eof() {
-            // SAFETY: no bound check necessary because it's checked in the condition
-            let ch = unsafe { self.stream.current_unchecked() };
+    fn read_while2(&mut self, needle1: u8, needle2: u8) -> Option<()> {
+        loop {
+            let ch = self.stream.current_cpy()?;
 
-            if *ch != needle1 && *ch != needle2 {
-                break;
+            let eq1 = ch == needle1;
+            let eq2 = ch == needle2;
+
+            if !eq1 & !eq2 {
+                return Some(());
             }
 
             self.stream.advance();
@@ -123,7 +122,7 @@ impl<'a> Parser<'a> {
 
     fn read_ident(&mut self) -> Option<&'a [u8]> {
         let start = self.stream.idx;
-        let bytes = unsafe { self.stream.data().get_unchecked(start..) };
+        let bytes = &self.stream.data()[start..];
 
         #[cfg(feature = "simd")]
         let end = util::search_non_ident_fast(bytes)?;
@@ -132,12 +131,10 @@ impl<'a> Parser<'a> {
         let end = util::search_non_ident_slow(bytes)?;
 
         self.stream.idx += end;
-        Some(unsafe { self.stream.slice_unchecked(start, start + end) })
+        Some(self.stream.slice(start, start + end))
     }
 
-    fn skip_comment(&mut self) -> Option<&'a [u8]> {
-        let start = self.stream.idx;
-
+    fn skip_comment_with_start(&mut self, start: usize) -> &'a [u8] {
         while !self.stream.is_eof() {
             let idx = self.stream.idx;
 
@@ -151,14 +148,14 @@ impl<'a> Parser<'a> {
                 let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
 
                 if is_end_of_comment {
-                    return Some(unsafe { self.stream.slice_unchecked(start, self.stream.idx) });
+                    return self.stream.slice(start, self.stream.idx);
                 }
             }
 
             self.stream.advance();
         }
 
-        None
+        &[]
     }
 
     fn parse_attribute(&mut self) -> Option<(&'a [u8], Option<&'a [u8]>)> {
@@ -184,12 +181,12 @@ impl<'a> Parser<'a> {
     fn parse_attributes(&mut self) -> Option<Attributes<'a>> {
         let mut attributes = Attributes::new();
 
-        while !self.stream.is_eof() {
+        loop {
             self.skip_whitespaces();
 
-            let cur = self.stream.current()?;
+            let cur = self.stream.current_cpy()?;
 
-            if constants::SELF_CLOSING.contains(cur) {
+            if util::is_closing(cur) {
                 break;
             }
 
@@ -203,7 +200,7 @@ impl<'a> Parser<'a> {
                 };
             }
 
-            if !constants::SELF_CLOSING.contains(self.stream.current()?) {
+            if !util::is_closing(self.stream.current_cpy()?) {
                 self.stream.advance();
             }
         }
@@ -211,237 +208,182 @@ impl<'a> Parser<'a> {
         Some(attributes)
     }
 
-    #[inline(never)]
-    fn parse_tag(&mut self, skip_current: bool) -> Option<NodeHandle> {
-        let start = self.stream.idx;
+    #[inline]
+    fn add_to_parent(&mut self, handle: NodeHandle) {
+        if let Some(last) = self.stack.last() {
+            let last = self
+                .tags
+                .get_mut(last.get_inner() as usize)
+                .unwrap()
+                .as_tag_mut()
+                .unwrap();
 
-        if skip_current {
-            self.stream.next()?;
+            last._children.push(handle);
+        } else {
+            self.ast.push(handle);
         }
+    }
 
-        let markup_declaration = self.stream.expect_and_skip_cond(b'!');
+    fn read_end(&mut self) {
+        self.stream.advance();
+        self.read_ident();
+        if let Some(handle) = self.stack.pop() {
+            let tag = self
+                .tags
+                .get_mut(handle.get_inner() as usize)
+                .unwrap()
+                .as_tag_mut()
+                .unwrap();
 
-        if markup_declaration {
-            let is_comment = self
-                .stream
-                .slice_checked(self.stream.idx, self.stream.idx + constants::COMMENT.len())
-                .eq(constants::COMMENT);
+            let ptr = self.stream.data().as_ptr() as usize;
+            let offset = tag._raw.as_ptr() as usize;
+            let offset = offset - ptr;
 
-            if is_comment {
-                self.stream.advance_by(constants::COMMENT.len());
-                let comment = self.skip_comment()?;
+            tag._raw = self.stream.slice(offset, self.stream.idx).into();
 
-                // Comments are ignored, so we return no element
-                return Some(self.register_tag(Node::Comment(comment.into())));
-            }
+            let (track_classes, track_ids) = (
+                self.options.is_tracking_classes(),
+                self.options.is_tracking_ids(),
+            );
 
-            let name = self.read_ident()?.to_ascii_uppercase();
+            if let (true, Some(bytes)) = (track_classes, &tag._attributes.class) {
+                let s = bytes
+                    .as_bytes_borrowed()
+                    .and_then(|x| std::str::from_utf8(x).ok())
+                    .map(|x| x.split_ascii_whitespace());
 
-            if name.eq(b"DOCTYPE") {
-                self.skip_whitespaces();
-
-                let is_html5 = self
-                    .read_ident()
-                    .map(|ident| ident.to_ascii_uppercase().eq(b"HTML"))
-                    .unwrap_or(false);
-
-                if is_html5 {
-                    self.version = Some(HTMLVersion::HTML5);
-                    self.skip_whitespaces();
-                    self.stream.expect_and_skip(b'>')?;
+                if let Some(s) = s {
+                    for class in s {
+                        self.classes
+                            .entry(class.into())
+                            .or_insert_with(InlineVec::new)
+                            .push(handle);
+                    }
                 }
-
-                // TODO: handle DOCTYPE for HTML version <5?
-
-                return None;
             }
 
-            // TODO: handle the case where <! is neither DOCTYPE nor a comment
-            return None;
+            if let (true, Some(bytes)) = (track_ids, &tag._attributes.id) {
+                self.ids.insert(bytes.clone(), handle);
+            }
         }
+        self.stream.advance(); // >
+    }
 
-        let name = self.read_ident()?;
+    #[cold]
+    #[inline(never)]
+    fn read_markdown(&mut self) -> Option<()> {
+        let start = self.stream.idx - 1; // position of the < which is needed when registering the comment
 
-        let attributes = self.parse_attributes()?;
+        self.stream.advance(); // skip !
 
-        let mut children = InlineVec::new();
+        let is_comment = self
+            .stream
+            .slice_len(self.stream.idx, 2)
+            .eq(constants::COMMENT);
 
-        let is_self_closing = self.stream.expect_and_skip_cond(b'/');
+        if is_comment {
+            let comment = self.skip_comment_with_start(start);
+            let comment = self.register_tag(Node::Comment(comment.into()));
+            self.add_to_parent(comment);
+        } else {
+            let tag = self.read_ident()?;
 
-        self.skip_whitespaces();
-
-        if is_self_closing {
-            self.stream.expect_and_skip(b'>')?;
-
-            let raw = self.stream.slice_from(start);
-
-            // If this is a self-closing tag (e.g. <img />), we want to return early instead of
-            // reading children as the next nodes don't belong to this tag
-            return Some(self.register_tag(Node::Tag(HTMLTag::new(
-                name.into(),
-                attributes,
-                children,
-                raw.into(),
-            ))));
-        }
-
-        self.stream.expect_and_skip(b'>')?;
-
-        if constants::VOID_TAGS.contains(&name) {
-            let raw = self.stream.slice_from(start);
-
-            // Some HTML tags don't have contents (e.g. <br>),
-            // so we need to return early
-            // Without it, any following tags would be sub-nodes
-            return Some(self.register_tag(Node::Tag(HTMLTag::new(
-                name.into(),
-                attributes,
-                children,
-                raw.into(),
-            ))));
-        }
-
-        while !self.stream.is_eof() {
             self.skip_whitespaces();
 
-            let idx = self.stream.idx;
+            if util::matches_case_insensitive(tag, *b"doctype") {
+                let doctype = self.read_ident()?;
 
-            let slice = self
-                .stream
-                .slice_checked(idx, idx + constants::END_OF_TAG.len());
+                let html5 = util::matches_case_insensitive(doctype, *b"html");
 
-            if slice.eq(&constants::END_OF_TAG) {
-                self.stream.advance_by(constants::END_OF_TAG.len());
-                self.read_ident()?;
+                if html5 {
+                    self.version = Some(HTMLVersion::HTML5);
+                }
 
-                // TODO: do we want to accept the tag if it has no closing tag?
-                self.stream.expect_and_skip(b'>');
-                break;
+                self.skip_whitespaces();
+                self.stream.advance(); // skip >
             }
-
-            // TODO: "partial" JS parser is needed to deal with script tags
-            let node_id = self.parse_single()?;
-
-            children.push(node_id);
         }
 
-        let raw = self.stream.slice_from(start);
-
-        Some(self.register_tag(Node::Tag(HTMLTag::new(
-            name.into(),
-            attributes,
-            children,
-            raw.into(),
-        ))))
+        Some(())
     }
 
-    fn parse_single(&mut self) -> Option<NodeHandle> {
+    fn parse_tag(&mut self) -> Option<()> {
+        let start = self.stream.idx;
+
+        self.stream.advance();
         self.skip_whitespaces();
+        let cur = self.stream.current_cpy()?;
 
-        let ch = self.stream.current_cpy()?;
-
-        if ch == constants::OPENING_TAG {
-            // If we've reached maximum recursion depth, we stop here and don't call parse_tag as
-            // it would blow up the stack.
-            // Instead, return None
-            if self.depth > self.options.max_depth() {
-                return None;
+        match cur {
+            b'/' => self.read_end(),
+            b'!' => {
+                self.read_markdown();
             }
-            self.depth += 1;
+            _ => {
+                let name = self.read_ident()?;
+                self.skip_whitespaces();
 
-            let node = if let Some(handle) = self.parse_tag(true) {
-                let tag_id = handle.get_inner();
+                let attr = self.parse_attributes()?;
 
-                if self.options.is_tracking() {
-                    let (id, class) = if let Some(Node::Tag(tag)) = self.tags.get(tag_id) {
-                        (tag._attributes.id.clone(), tag._attributes.class.clone())
-                    } else {
-                        (None, None)
-                    };
+                self.stream.advance(); // skip >
 
-                    if let Some(id) = id {
-                        self.ids.insert(id, handle);
-                    }
+                let this = self.register_tag(Node::Tag(HTMLTag::new(
+                    name.into(),
+                    attr,
+                    InlineVec::new(),
+                    self.stream.slice(start, self.stream.idx).into(),
+                )));
 
-                    if let Some(class) = class {
-                        self.process_class(&class, handle);
-                    }
+                self.add_to_parent(this);
+
+                // some tags are self closing, so even though there might not be a /,
+                // we don't always want to push them to the stack
+                // e.g. <br><p>Hello</p>
+                // <p> should not be a subtag of <br>
+                if !constants::VOID_TAGS.contains(&name) {
+                    self.stack.push(this);
                 }
-
-                Some(handle)
-            } else {
-                self.stream.advance();
-                None
-            };
-
-            self.depth -= 1;
-            node
-        } else {
-            let node = Node::Raw(self.read_to(b'<').into());
-            Some(self.register_tag(node))
+            }
         }
+
+        Some(())
     }
 
-    #[inline(never)]
-    fn process_class(&mut self, class: &Bytes<'a>, element: NodeHandle) {
-        // TODO(y21): check if unwrap_unchecked makes a difference
-        let raw = class.as_bytes_borrowed().unwrap();
+    pub(crate) fn parse_single(&mut self) -> Option<()> {
+        loop {
+            let cur = self.stream.current()?;
 
-        let mut stream = Stream::new(raw);
-
-        let mut last = 0;
-
-        while !stream.is_eof() {
-            // SAFETY: no bound check necessary because it's checked in the condition
-            let cur = unsafe { stream.current_cpy_unchecked() };
-
-            let is_last_char = stream.idx == raw.len() - 1;
-
-            if util::is_strict_whitespace(cur) || is_last_char {
-                let idx = if is_last_char {
-                    stream.idx + 1
-                } else {
-                    stream.idx
-                };
-
-                let slice = stream.slice(last, idx);
-                if !slice.is_empty() {
-                    self.classes
-                        .entry(slice.into())
-                        .or_insert_with(InlineVec::new)
-                        .push(element);
-                }
-
-                last = idx + 1;
+            if *cur == b'<' {
+                self.parse_tag();
+            } else {
+                let raw = Node::Raw(self.read_to(b'<').into());
+                let handle = self.register_tag(raw);
+                self.add_to_parent(handle);
             }
-
-            stream.advance();
         }
     }
 
     /// Resolves an internal Node ID obtained from a NodeHandle to a Node
     #[inline]
     pub fn resolve_node_id(&self, id: InnerNodeHandle) -> Option<&Node<'a>> {
-        self.tags.get(id)
+        self.tags.get(id as usize)
     }
 
-    /// Resolves an internal Node ID obtained from a NodeHandle to a mutable Node
+    /// Resolves an internal Node ID obtained from a NodeHandle to a Node
     #[inline]
     pub fn resolve_node_id_mut(&mut self, id: InnerNodeHandle) -> Option<&mut Node<'a>> {
-        self.tags.get_mut(id)
+        self.tags.get_mut(id as usize)
     }
 
-    pub(crate) fn parse(mut self) -> Result<Parser<'a>, ParseError> {
+    pub(crate) fn parse(&mut self) -> Result<(), ParseError> {
         if self.stream.len() > u32::MAX as usize {
             return Err(ParseError::InvalidLength);
         }
 
         while !self.stream.is_eof() {
-            if let Some(node) = self.parse_single() {
-                self.ast.push(node);
-            }
+            self.parse_single();
         }
 
-        Ok(self)
+        Ok(())
     }
 }

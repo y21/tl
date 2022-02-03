@@ -98,6 +98,9 @@ impl<'a> VDom<'a> {
     ///
     /// The difference between `children()` and `nodes()` is that children only returns the immediate children of the root node,
     /// while `nodes()` returns all nodes, including nested tags.
+    ///
+    /// # Order
+    /// The order of the returned nodes is the same as the order of the nodes in the HTML document.
     pub fn nodes(&self) -> &[Node<'a>] {
         &self.parser.tags
     }
@@ -128,7 +131,7 @@ impl<'a> VDom<'a> {
 
     /// Returns the contained markup of all of the elements in this DOM.
     ///
-    /// ## Example
+    /// # Example
     /// ```
     /// let html = r#"<div><p href="/about" id="find-me">Hello world</p></div>"#;
     /// let mut dom = tl::parse(html, Default::default()).unwrap();
@@ -155,31 +158,6 @@ impl<'a> VDom<'a> {
         inner_html
     }
 
-    /// Calls the given closure with each tag as parameter
-    ///
-    /// The closure must return a boolean, indicating whether it should stop iterating
-    /// Returning `true` will break the loop
-    #[deprecated(
-        since = "0.3.0",
-        note = "please use `nodes().iter().find(...)` instead"
-    )]
-    pub fn find_node<F>(&self, mut f: F) -> Option<NodeHandle>
-    where
-        F: FnMut(&Node<'a>) -> bool,
-    {
-        let parser = self.parser();
-
-        for node in self.children() {
-            let node = node.get(parser).and_then(|x| x.find_node(parser, &mut f));
-
-            if node.is_some() {
-                return node;
-            }
-        }
-
-        None
-    }
-
     /// Tries to parse the query selector and returns an iterator over elements that match the given query selector.
     ///
     /// # Example
@@ -192,9 +170,9 @@ impl<'a> VDom<'a> {
     pub fn query_selector<'b>(
         &'b self,
         selector: &'b str,
-    ) -> Option<QuerySelectorIterator<'a, 'b>> {
-        let selector = queryselector::Parser::new(selector.as_bytes()).selector()?;
-        let iter = queryselector::QuerySelectorIterator::new(selector, self);
+    ) -> Option<QuerySelectorIterator<'a, 'b, Self>> {
+        let selector = crate::parse_query_selector(selector)?;
+        let iter = queryselector::QuerySelectorIterator::new(selector, self.parser(), self);
         Some(iter)
     }
 }
@@ -233,7 +211,8 @@ impl<'a> VDomGuard<'a> {
         //    that, when dropped, will free the input string
         // b) fail, and we return a ParseError
         //    and `RawString`s destructor will run and deallocate the string properly
-        let parser = Parser::new(input_ref, options).parse()?;
+        let mut parser = Parser::new(input_ref, options);
+        parser.parse()?;
 
         Ok(Self {
             _s: input,

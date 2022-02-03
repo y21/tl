@@ -11,9 +11,9 @@ tl is a fast HTML parser written in pure Rust. <br />
 Add `tl` to your dependencies.
 ```toml
 [dependencies]
-tl = "0.5.0"
+tl = "0.6.0"
 # or, if you need SIMD
-tl = { version = "0.5.0", features = ["simd"] }
+tl = { version = "0.6.0", features = ["simd"] }
 ```
 
 The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting AST, although in the future this will likely be customizable, in case you need explicit error checking.
@@ -21,109 +21,84 @@ The main function is `tl::parse()`. It accepts an HTML source code string and pa
 ## Examples
 Finding an element by its id attribute and printing the inner text:
 ```rust
-fn main() {
-    let input = r#"<p id="text">Hello</p>"#;
-    let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
-    let parser = dom.parser();
-    let element = dom.get_element_by_id("text")
-        .expect("Failed to find element")
-        .get(parser)
-        .unwrap();
+let input = r#"<p id="text">Hello</p>"#;
+let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
+let parser = dom.parser();
+let element = dom.get_element_by_id("text")
+  .expect("Failed to find element")
+  .get(parser)
+  .unwrap();
 
-    println!("Inner text: {}", element.inner_text(parser));
-}
+assert_eq!(element.inner_text(parser), "Hello");
 ```
 
 Finding a tag using the query selector API:
 ```rust
-fn main() {
-    let input = r#"<div><img src="cool-image.png" /></div>"#;
-    let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
-    let img = dom.query_selector("img[src]").unwrap().next();
+let input = r#"<div><img src="cool-image.png" /></div>"#;
+let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
+let img = dom.query_selector("img[src]").unwrap().next();
     
-    println!("{:?}", img);
-}
+assert!(img.is_some());
 ```
 
 Iterating over the subnodes of an HTML document:
 ```rust
-fn main() {
-    let input = r#"<div><img src="cool-image.png" /></div>"#;
-    let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
-    let img = dom.nodes()
-        .iter()
-        .find(|node| {
-            node.as_tag().map_or(false, |tag| tag.name() == "img".into())
-        });
+let input = r#"<div><img src="cool-image.png" /></div>"#;
+let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
+let img = dom.nodes()
+  .iter()
+  .find(|node| {
+    node.as_tag().map_or(false, |tag| tag.name() == "img")
+  });
     
-    println!("{:?}", img);
-}
+assert!(img.is_some());
 ```
 
 Mutating the `href` attribute of an anchor tag:
 > In a real world scenario, you would want to handle errors properly instead of unwrapping.
 ```rust
-fn main() {
-  let input = r#"<div><a href="/about">About</a></div>"#;
-  let mut dom = tl::parse(input, tl::ParserOptions::default())
-    .expect("HTML string too long");
+let input = r#"<div><a href="/about">About</a></div>"#;
+let mut dom = tl::parse(input, tl::ParserOptions::default())
+  .expect("HTML string too long");
   
-  let anchor = dom.query_selector("a[href]")
-    .expect("Failed to parse query selector")
-    .next()
-    .expect("Failed to find anchor tag");
+let anchor = dom.query_selector("a[href]")
+  .expect("Failed to parse query selector")
+  .next()
+  .expect("Failed to find anchor tag");
 
-  let parser_mut = dom.parser_mut();
+let parser_mut = dom.parser_mut();
 
-  let anchor = anchor.get_mut(parser_mut)
-    .expect("Failed to resolve node")
-    .as_tag_mut()
-    .expect("Failed to cast Node to HTMLTag");
+let anchor = anchor.get_mut(parser_mut)
+  .expect("Failed to resolve node")
+  .as_tag_mut()
+  .expect("Failed to cast Node to HTMLTag");
 
-  let attributes = anchor.attributes_mut();
+let attributes = anchor.attributes_mut();
 
-  attributes.get_mut("href")
-    .flatten()
-    .expect("Attribute not found or malformed")
-    .set("http://localhost/about");
+attributes.get_mut("href")
+  .flatten()
+  .expect("Attribute not found or malformed")
+  .set("http://localhost/about");
 
-  assert_eq!(attributes.get("href").flatten(), Some("http://localhost/about".into()));
-}
+assert_eq!(attributes.get("href").flatten(), Some(&"http://localhost/about".into()));
 ```
 
 ## SIMD-accelerated parsing
 This crate has optimized parsing functions which make use of SIMD. These are disabled by default and must be enabled explicitly by passing the `simd` feature flag due to the unstable feature `portable_simd`. This requires a **nightly** compiler!
 
 ## Benchmarks
-Results for parsing a ~320KB [HTML document](https://github.com/y21/rust-html-parser-benchmark/blob/80d24a260ab9377bc704aa0b12657539aeaa4777/data/wikipedia.html).
-Left and right numbers are lower/upper bounds of the confidence interval. The middle number is criterion's best estimate of time/throughput for each iteration.
+Results for parsing a ~320KB [HTML document](https://github.com/y21/rust-html-parser-benchmark/blob/80d24a260ab9377bc704aa0b12657539aeaa4777/data/wikipedia.html). Benchmarked using criterion on codespaces hardware.
 ```notrust
-tl + simd
-  time:   [627.03 us 628.23 us 629.48 us]
-  thrpt:  [496.88 MiB/s 497.87 MiB/s 498.83 MiB/s]
-
-html5ever
-  time:   [5.7817 ms 5.7900 ms 5.7985 ms]
-  thrpt:  [53.942 MiB/s 54.021 MiB/s 54.098 MiB/s]
-  
-htmlparser
-  time:   [17.738 ms 17.764 ms 17.790 ms]
-  thrpt:  [17.582 MiB/s 17.608 MiB/s 17.634 MiB/s]
-  
-rphtml
-  time:   [6.0053 ms 6.0154 ms 6.0256 ms]
-  thrpt:  [51.909 MiB/s 51.997 MiB/s 52.084 MiB/s]
-  
-rusthtml
-  time:   [3.3830 ms 3.3881 ms 3.3933 ms]
-  thrpt:  [92.175 MiB/s 92.317 MiB/s 92.455 MiB/s]
-  
-htmlstream
-  time:   [2.2752 ms 2.2786 ms 2.2822 ms]
-  thrpt:  [137.05 MiB/s 137.27 MiB/s 137.48 MiB/s]
+              time            thrpt
+tl + simd     628.23 us       497.87 MiB/s
+htmlstream    2.2786 ms       137.48 MiB/s
+rusthtml      3.3881 ms       92.317 MiB/s
+html5ever     5.7900 ms       54.021 MiB/s
+rphtml        6.0154 ms       51.997 MiB/s
+htmlparser    17.764 ms       17.608 MiB/s
 ```
 
-[Source](https://github.com/y21/rust-html-parser-benchmark/tree/53238f68bbb57adc8dffdd245693ca1caa89cf4f) (file: wikipedia.html)
+[Source](https://github.com/y21/rust-html-parser-benchmark/tree/53238f68bbb57adc8dffdd245693ca1caa89cf4f)
 
 ## Design
 Due to the nature of zero-copy parsers, the string must be kept alive for the entire lifetime of the parser/dom.

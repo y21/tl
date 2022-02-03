@@ -1,5 +1,6 @@
-use crate::{Node, VDom};
+use crate::Node;
 
+/// A single query selector node
 #[derive(Debug, Clone)]
 pub enum Selector<'a> {
     /// Tag selector: foo
@@ -12,7 +13,7 @@ pub enum Selector<'a> {
     All,
     /// And combinator: .foo.bar
     And(Box<Selector<'a>>, Box<Selector<'a>>),
-    // Or combinator: .foo, .bar
+    /// Or combinator: .foo, .bar
     Or(Box<Selector<'a>>, Box<Selector<'a>>),
     /// Descendant combinator: .foo .bar
     Descendant(Box<Selector<'a>>, Box<Selector<'a>>),
@@ -33,7 +34,8 @@ pub enum Selector<'a> {
 }
 
 impl<'a> Selector<'a> {
-    pub fn matches<'b>(&self, dom: &VDom<'b>, node: &Node<'b>) -> bool {
+    /// Checks if the given node matches this selector
+    pub fn matches<'b>(&self, node: &Node<'b>) -> bool {
         match self {
             Self::Tag(tag) => node.as_tag().map_or(false, |t| t._name.as_bytes().eq(*tag)),
             Self::Id(id) => node
@@ -42,8 +44,8 @@ impl<'a> Selector<'a> {
             Self::Class(class) => node
                 .as_tag()
                 .map_or(false, |t| t._attributes.is_class_member(*class)),
-            Self::And(a, b) => a.matches(dom, node) && b.matches(dom, node),
-            Self::Or(a, b) => a.matches(dom, node) || b.matches(dom, node),
+            Self::And(a, b) => a.matches(node) && b.matches(node),
+            Self::Or(a, b) => a.matches(node) || b.matches(node),
             Self::All => true,
             Self::Attribute(attribute) => node
                 .as_tag()

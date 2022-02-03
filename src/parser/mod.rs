@@ -1,5 +1,5 @@
 mod base;
-mod constants;
+pub(crate) mod constants;
 mod handle;
 mod options;
 mod tag;

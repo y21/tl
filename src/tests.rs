@@ -21,7 +21,7 @@ fn inner_html() {
 #[test]
 fn children_len() {
     let dom = parse(
-        "<!-- element 1 --> <div><div>element 3</div></div>",
+        "<!-- element 1 --><div><div>element 3</div></div>",
         ParserOptions::default(),
     )
     .unwrap();
@@ -159,7 +159,7 @@ fn with() {
     let tag = dom
         .nodes()
         .iter()
-        .find(|x| x.as_tag().map_or(false, |x| x.name() == "span".into()));
+        .find(|x| x.as_tag().map_or(false, |x| x.name() == "span"));
 
     assert_eq!(
         tag.map(|tag| tag.inner_text(parser)),
@@ -181,7 +181,7 @@ fn dom_nodes() {
     let element = dom
         .nodes()
         .iter()
-        .find(|x| x.as_tag().map_or(false, |x| x.name().eq(&"a".into())));
+        .find(|x| x.as_tag().map_or(false, |x| x.name().eq("a")));
 
     assert_eq!(element.map(|x| x.inner_text(parser)), Some("nested".into()));
 }
@@ -200,18 +200,6 @@ fn fuzz() {
 }
 
 #[test]
-fn query_selector_simple() {
-    let input = "<div><p class=\"hi\">hello</p></div>";
-    let dom = parse(input, ParserOptions::default()).unwrap();
-    let parser = dom.parser();
-    let mut selector = dom.query_selector(".hi").unwrap();
-    let el = force_as_tag(selector.next().and_then(|x| x.get(parser)).unwrap());
-
-    assert_eq!(dom.nodes().len(), 3);
-    assert_eq!(el.inner_text(parser), "hello");
-}
-
-#[test]
 fn mutate_dom() {
     let input = r#"<img src="test.png" />"#;
     let mut dom = parse(input, ParserOptions::default()).unwrap();
@@ -227,7 +215,7 @@ fn mutate_dom() {
     let bytes = attr.get_mut("src").flatten().unwrap();
     bytes.set("world.png").unwrap();
 
-    assert_eq!(attr.get("src"), Some(Some("world.png".into())));
+    assert_eq!(attr.get("src"), Some(Some(&"world.png".into())));
 }
 
 #[cfg(feature = "simd")]
@@ -235,6 +223,14 @@ mod simd {
     // These tests make sure that SIMD functions do the right thing
 
     use crate::util;
+
+    #[test]
+    fn matches_case_insensitive_test() {
+        assert!(util::matches_case_insensitive(b"hTmL", *b"html"));
+        assert!(!util::matches_case_insensitive(b"hTmLs", *b"html"));
+        assert!(!util::matches_case_insensitive(b"hTmy", *b"html"));
+        assert!(!util::matches_case_insensitive(b"/Tmy", *b"html"));
+    }
 
     #[test]
     fn string_search() {
@@ -444,4 +440,147 @@ fn unquoted() {
         element.and_then(|x| x.get(parser).map(|x| x.inner_text(parser))),
         Some("Hello World".into())
     );
+}
+
+mod query_selector {
+    use super::*;
+    #[test]
+    fn query_selector_simple() {
+        let input = "<div><p class=\"hi\">hello</p></div>";
+        let dom = parse(input, ParserOptions::default()).unwrap();
+        let parser = dom.parser();
+        let mut selector = dom.query_selector(".hi").unwrap();
+        let el = force_as_tag(selector.next().and_then(|x| x.get(parser)).unwrap());
+
+        assert_eq!(dom.nodes().len(), 3);
+        assert_eq!(el.inner_text(parser), "hello");
+    }
+
+    #[test]
+    fn tag_query_selector() {
+        // empty
+        let dom = parse("<p></p>", ParserOptions::default()).unwrap();
+        let parser = dom.parser();
+        let selector = dom.nodes()[0]
+            .as_tag()
+            .unwrap()
+            .query_selector(parser, "div.z")
+            .unwrap();
+        assert_eq!(selector.count(), 0);
+
+        // one child
+        let dom = parse(
+            r#"<p><div class="z">PASS</div></p>"#,
+            ParserOptions::default(),
+        )
+        .unwrap();
+        let parser = dom.parser();
+        let mut selector = dom.nodes()[0]
+            .as_tag()
+            .unwrap()
+            .query_selector(parser, "div.z")
+            .unwrap();
+        assert_eq!(selector.clone().count(), 1);
+        assert_eq!(
+            selector
+                .next()
+                .unwrap()
+                .get(parser)
+                .unwrap()
+                .inner_text(parser),
+            "PASS"
+        );
+
+        // nested
+        let dom = parse(
+            r#"<p><div class="z"><div class="y">PASS</div></div></p>"#,
+            ParserOptions::default(),
+        )
+        .unwrap();
+        let parser = dom.parser();
+        let mut selector = dom.nodes()[0]
+            .as_tag()
+            .unwrap()
+            .query_selector(parser, "div.y")
+            .unwrap();
+        assert_eq!(selector.clone().count(), 1);
+        assert_eq!(
+            selector
+                .next()
+                .unwrap()
+                .get(parser)
+                .unwrap()
+                .inner_text(parser),
+            "PASS"
+        );
+    }
+}
+
+#[test]
+fn nodes_order() {
+    let input = r#"
+    <p>test</p><div><span>test2</span></div>
+    "#
+    .trim();
+    let dom = parse(input, Default::default()).unwrap();
+    let nodes = dom.nodes();
+
+    // 5 nodes in total
+    assert_eq!(nodes.len(), 5);
+
+    // First node is <p>
+    assert_eq!(&nodes[0].as_tag().unwrap()._name, "p");
+    // Second node is inner text of <p>: test
+    assert_eq!(nodes[1].as_raw().unwrap().as_bytes(), b"test");
+    // Third node is <div>
+    assert_eq!(&nodes[2].as_tag().unwrap()._name, "div");
+    // Fourth node is inner <span> node
+    assert_eq!(&nodes[3].as_tag().unwrap()._name, "span");
+    // Fifth node is inner text of <span>: test2
+    assert_eq!(nodes[4].as_raw().unwrap().as_bytes(), b"test2");
+}
+
+#[test]
+fn comment() {
+    let dom = parse("<!-- test -->", Default::default()).unwrap();
+    let nodes = dom.nodes();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(
+        nodes[0].as_comment().unwrap().as_utf8_str(),
+        "<!-- test -->"
+    );
+}
+
+#[test]
+fn tag_all_children() {
+    fn assert_len(input: &str, len: usize) {
+        let dom = parse(input, Default::default()).unwrap();
+        let el = dom.nodes()[0].as_tag().unwrap();
+        assert_eq!(el.children().all(dom.parser()).len(), len);
+    }
+
+    fn assert_last(input: &str, last: &str) {
+        let dom = parse(input, Default::default()).unwrap();
+        let el = dom.nodes()[0].as_tag().unwrap();
+        assert_eq!(
+            el.children()
+                .all(dom.parser())
+                .last()
+                .unwrap()
+                .inner_text(dom.parser()),
+            last
+        );
+    }
+
+    assert_len(r#"<div></div>"#, 0);
+    assert_len(r#"<div>a</div>"#, 1);
+    assert_len(r#"<div><p></p></div>"#, 1);
+    assert_len(r#"<div><p>a</p></div>"#, 2);
+    assert_len(r#"<div><p><span></span></p></div>"#, 2);
+    assert_len(r#"<div><p><span>a</span></p></div>"#, 3);
+
+    assert_last(r#"<div>a</div>"#, "a");
+    assert_last(r#"<div><p>a</p></div>"#, "a");
+    assert_last(r#"<div>b<p>a</p></div>"#, "a");
+    assert_last(r#"<div>b<p><span>a</span></p></div>"#, "a");
 }
