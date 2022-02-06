@@ -16,7 +16,7 @@ impl<'a> Parser<'a> {
     }
 
     fn skip_whitespaces(&mut self) -> bool {
-        let has_whitespace = self.stream.expect_and_skip(b' ').is_some();
+        let has_whitespace = self.stream.expect_and_skip_cond(b' ');
         while !self.stream.is_eof() {
             if self.stream.expect_and_skip(b' ').is_none() {
                 break;

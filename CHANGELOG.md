@@ -1,5 +1,8 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.6.2
+- Fixes a bug where the slash in slash tags (`<br />`) is interpreted as `>` and causes the next `>` to be interpreted as a text node on its own.
+
 # 0.6.1
 - Fixed an off-by-one error in the `QueryIterable` trait implementation for `HTMLTag` that caused query selectors on HTML tags to return one node less than they should.
 
