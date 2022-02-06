@@ -64,7 +64,7 @@ impl<'a> QueryIterable<'a> for HTMLTag<'a> {
     #[inline]
     fn len(&self, parser: &Parser) -> usize {
         if let Some((start, end)) = self.children().boundaries(parser) {
-            (end - start) as usize
+            ((end - start) + 1) as usize
         } else {
             0
         }
