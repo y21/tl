@@ -599,3 +599,12 @@ fn assert_length() {
     assert_len("<div><a><a></a></a></div>", "a", 2);
     assert_len("<div><a><span></span></a></div>", "span", 1);
 }
+
+#[test]
+fn self_closing_no_child() {
+    let dom = parse("<br /><p>test</p>", Default::default()).unwrap();
+    let nodes = dom.nodes();
+    assert_eq!(nodes.len(), 3);
+    assert_eq!(nodes[0].as_tag().unwrap()._children.len(), 0);
+    assert_eq!(nodes[0].as_tag().unwrap().raw(), "<br />");
+}

@@ -325,6 +325,8 @@ impl<'a> Parser<'a> {
 
                 let attr = self.parse_attributes()?;
 
+                let is_self_closing = self.stream.expect_and_skip_cond(b'/');
+
                 self.stream.advance(); // skip >
 
                 let this = self.register_tag(Node::Tag(HTMLTag::new(
@@ -340,7 +342,7 @@ impl<'a> Parser<'a> {
                 // we don't always want to push them to the stack
                 // e.g. <br><p>Hello</p>
                 // <p> should not be a subtag of <br>
-                if !constants::VOID_TAGS.contains(&name) {
+                if !is_self_closing && !constants::VOID_TAGS.contains(&name) {
                     self.stack.push(this);
                 }
             }

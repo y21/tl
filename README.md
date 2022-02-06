@@ -11,9 +11,10 @@ tl is a fast HTML parser written in pure Rust. <br />
 Add `tl` to your dependencies.
 ```toml
 [dependencies]
-tl = "0.6.1"
+tl = "0.6.2"
 # or, if you need SIMD
-tl = { version = "0.6.1", features = ["simd"] }
+# (requires a nightly compiler!)
+tl = { version = "0.6.2", features = ["simd"] }
 ```
 
 The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting AST, although in the future this will likely be customizable, in case you need explicit error checking.
