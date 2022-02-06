@@ -1,5 +1,8 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.6.1
+- Fixed an off-by-one error in the `QueryIterable` trait implementation for `HTMLTag` that caused query selectors on HTML tags to return one node less than they should.
+
 # 0.6.0
 > **Warning: This release contains breaking changes**
 - ⚠ Removed deprecated method `VDom::find_node`

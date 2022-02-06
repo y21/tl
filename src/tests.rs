@@ -584,3 +584,18 @@ fn tag_all_children() {
     assert_last(r#"<div>b<p>a</p></div>"#, "a");
     assert_last(r#"<div>b<p><span>a</span></p></div>"#, "a");
 }
+
+#[test]
+fn assert_length() {
+    fn assert_len(input: &str, selector: &str, len: usize) {
+        let dom = parse(input, Default::default()).unwrap();
+        let el = dom.nodes()[0].as_tag().unwrap();
+        let query = el.query_selector(dom.parser(), selector).unwrap();
+        assert_eq!(query.count(), len);
+    }
+
+    assert_len("<div></div>", "a", 0);
+    assert_len("<div><a></a></div>", "a", 1);
+    assert_len("<div><a><a></a></a></div>", "a", 2);
+    assert_len("<div><a><span></span></a></div>", "span", 1);
+}
