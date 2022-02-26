@@ -1,5 +1,8 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.6.3
+- Fixes a bug where `Attributes::class()` returned its id attribute instead of class. See [y21/tl#26](https://github.com/y21/tl/pull/26)
+
 # 0.6.2
 - Fixes a bug where the slash in slash tags (`<br />`) is interpreted as `>` and causes the next `>` to be interpreted as a text node on its own.
 
