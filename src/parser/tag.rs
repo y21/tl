@@ -135,7 +135,7 @@ impl<'a> Attributes<'a> {
 
     /// Returns the `class` attribute of this HTML tag, if present
     pub fn class(&self) -> Option<&Bytes<'a>> {
-        self.id.as_ref()
+        self.class.as_ref()
     }
 
     /// Returns an iterator over all of the class members
