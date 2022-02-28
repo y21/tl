@@ -1,5 +1,8 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.7.1
+- Version bump in README.md
+
 # 0.7.0
 > **Warning: This release contains breaking changes**
 - ⚠ Function signature of `Attributes::insert` has changed:
