@@ -104,6 +104,17 @@ impl<'a> From<&'a [u8]> for Bytes<'a> {
     }
 }
 
+impl TryFrom<String> for Bytes<'static> {
+    type Error = SetBytesError;
+
+    #[inline]
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        let mut bytes = Bytes::new();
+        bytes.set(s)?;
+        Ok(bytes)
+    }
+}
+
 /// Converts `Bytes` raw parts to a slice
 #[inline]
 unsafe fn compact_bytes_to_slice<'a>(ptr: *const u8, l: u32) -> &'a [u8] {
