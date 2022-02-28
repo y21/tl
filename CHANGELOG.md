@@ -1,10 +1,20 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.7.0
+> **Warning: This release contains breaking changes**
+- ⚠ Function signature of `Attributes::insert` has changed:
+    - It now takes two generic parameters `K, V` instead of just one.
+    Prior to this version, this meant that the key and value type had to match.
+    See [y21/tl#27](https://github.com/y21/tl/pull/26) for more details.
+- Added a `TryFrom<String> for Bytes` implementation for convenience to create owned `Bytes`.
+- Added `HTMLTag::boundaries` method for obtaining the start and end position of a tag in the source string.
+- Fixed a panic when source string abruptly ends with `<tag/`
+
 # 0.6.3
-- Fixes a bug where `Attributes::class()` returned its id attribute instead of class. See [y21/tl#26](https://github.com/y21/tl/pull/26)
+- Fixed a bug where `Attributes::class()` returned its id attribute instead of class. See [y21/tl#26](https://github.com/y21/tl/pull/26)
 
 # 0.6.2
-- Fixes a bug where the slash in slash tags (`<br />`) is interpreted as `>` and causes the next `>` to be interpreted as a text node on its own.
+- Fixed a bug where the slash in slash tags (`<br />`) is interpreted as `>` and causes the next `>` to be interpreted as a text node on its own.
 
 # 0.6.1
 - Fixed an off-by-one error in the `QueryIterable` trait implementation for `HTMLTag` that caused query selectors on HTML tags to return one node less than they should.

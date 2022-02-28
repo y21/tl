@@ -91,9 +91,10 @@ impl<'a> Attributes<'a> {
     }
 
     /// Inserts a new attribute into this attributes collection
-    pub fn insert<B>(&mut self, key: B, value: Option<B>)
+    pub fn insert<K, V>(&mut self, key: K, value: Option<V>)
     where
-        B: Into<Bytes<'a>>,
+        K: Into<Bytes<'a>>,
+        V: Into<Bytes<'a>>,
     {
         let key: Bytes = key.into();
         let value = value.map(Into::into);
@@ -264,6 +265,25 @@ impl<'a> HTMLTag<'a> {
     /// This simply returns a reference to the substring.
     pub fn raw(&self) -> &Bytes<'a> {
         &self._raw
+    }
+
+    /// Returns the boundaries/position `(start, end)` of this HTML tag in the source string.
+    ///
+    /// ## Example
+    /// ```
+    /// let dom = tl::parse("<p><span>hello</span></p>", Default::default()).unwrap();
+    /// let parser = dom.parser();
+    /// let span = dom.nodes().iter().filter_map(|n| n.as_tag()).find(|n| n.name() == "span").unwrap();
+    /// let (start, end) = span.boundaries(parser);
+    /// assert_eq!((start, end), (3, 20));
+    /// ```
+    pub fn boundaries(&self, parser: &Parser<'a>) -> (usize, usize) {
+        let raw = self._raw.as_bytes();
+        let input = parser.stream.data().as_ptr();
+        let start = raw.as_ptr();
+        let offset = start as usize - input as usize;
+        let end = offset + raw.len();
+        (offset, end)
     }
 
     /// Returns the contained text of this element, excluding any markup

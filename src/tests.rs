@@ -1,4 +1,4 @@
-use crate::{parse, parse_owned};
+use crate::{parse, parse_owned, Bytes};
 use crate::{parser::*, HTMLTag, Node};
 
 fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
@@ -192,6 +192,7 @@ fn fuzz() {
     // We don't need to assert anything here, just see that they finish
     parse("J\x00<", ParserOptions::default()).unwrap();
     parse("<!J", ParserOptions::default()).unwrap();
+    parse("<=/Fy<=/", Default::default()).unwrap();
 
     // Miri is too slow... :(
     let count = if cfg!(miri) { 100usize } else { 10000usize };
@@ -607,4 +608,22 @@ fn self_closing_no_child() {
     assert_eq!(nodes.len(), 3);
     assert_eq!(nodes[0].as_tag().unwrap()._children.len(), 0);
     assert_eq!(nodes[0].as_tag().unwrap().raw(), "<br />");
+}
+
+#[test]
+fn insert_attribute_owned() {
+    // https://github.com/y21/tl/issues/27
+    let mut attr = Attributes::new();
+    let style = "some style".to_string();
+    attr.insert("style", Some(Bytes::try_from(style).unwrap()));
+    assert_eq!(attr.get("style"), Some(Some(&"some style".into())));
+}
+
+#[test]
+fn boundaries() {
+    // https://github.com/y21/tl/issues/25
+    let dom = parse("<div><p>haha</p></div>", Default::default()).unwrap();
+    let span = dom.nodes()[1].as_tag().unwrap();
+    let boundary = span.boundaries(dom.parser());
+    assert_eq!(boundary, (5, 15));
 }
