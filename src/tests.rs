@@ -192,6 +192,7 @@ fn fuzz() {
     // We don't need to assert anything here, just see that they finish
     parse("J\x00<", ParserOptions::default()).unwrap();
     parse("<!J", ParserOptions::default()).unwrap();
+    parse("<=/Fy<=/", Default::default()).unwrap();
 
     // Miri is too slow... :(
     let count = if cfg!(miri) { 100usize } else { 10000usize };

@@ -327,7 +327,7 @@ impl<'a> Parser<'a> {
 
                 let is_self_closing = self.stream.expect_and_skip_cond(b'/');
 
-                self.stream.advance(); // skip >
+                self.stream.expect_and_skip(b'>')?;
 
                 let this = self.register_tag(Node::Tag(HTMLTag::new(
                     name.into(),

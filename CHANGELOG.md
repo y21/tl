@@ -8,6 +8,7 @@ Changes annotated with `⚠` are breaking.
     See [y21/tl#27](https://github.com/y21/tl/pull/26) for more details.
 - Added a `TryFrom<String> for Bytes` implementation for convenience to create owned `Bytes`.
 - Added `HTMLTag::boundaries` method for obtaining the start and end position of a tag in the source string.
+- Fixed a panic when source string abruptly ends with `<tag/`
 
 # 0.6.3
 - Fixed a bug where `Attributes::class()` returned its id attribute instead of class. See [y21/tl#26](https://github.com/y21/tl/pull/26)
