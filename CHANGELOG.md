@@ -1,5 +1,10 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.7.2
+- Add `Attributes::contains(key)` to check if an attribute exists.
+- Add `Attributes::remove(key)` to remove an attribute.
+- Add `Attributes::remove_value(key)` to delete the value of a given attribute key.
+
 # 0.7.1
 - Version bump in README.md
 
