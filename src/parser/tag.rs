@@ -3,7 +3,7 @@ use crate::{
     queryselector::{self, QuerySelectorIterator},
     Bytes, InnerNodeHandle,
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, mem};
 
 use super::{handle::NodeHandle, Parser};
 
@@ -73,6 +73,65 @@ impl<'a> Attributes<'a> {
             b"id" => self.id.as_ref().map(Some),
             b"class" => self.class.as_ref().map(Some),
             _ => self.raw.get(&key).map(|x| x.as_ref()),
+        }
+    }
+
+    /// Checks whether this attributes collection contains a given key
+    pub fn contains<B>(&self, key: B) -> bool
+    where
+        B: Into<Bytes<'a>>,
+    {
+        self.get(key).is_some()
+    }
+
+    /// Removes an attribute from this collection and returns it.
+    ///
+    /// As with [`Attributes::get()`], the outer Option is set to None if the attribute does not exist.
+    /// The inner option is set to None if the attribute exists but has no value.
+    ///
+    /// # Example
+    /// ```
+    /// let mut dom = tl::parse("<span contenteditable=\"true\"></span>", Default::default()).unwrap();
+    /// let element = dom.nodes_mut()[0].as_tag_mut().unwrap();
+    /// let attributes = element.attributes_mut();
+    /// let attr = attributes.remove("contenteditable");
+    /// assert_eq!(attr, Some(Some("true".into())));
+    /// assert_eq!(attributes.len(), 0);
+    /// ```
+    pub fn remove<B>(&mut self, key: B) -> Option<Option<Bytes<'a>>>
+    where
+        B: Into<Bytes<'a>>,
+    {
+        let key: Bytes = key.into();
+
+        match key.as_bytes() {
+            b"id" => self.id.take().map(Some),
+            b"class" => self.class.take().map(Some),
+            _ => self.raw.remove(&key),
+        }
+    }
+
+    /// Removes the value of an attribute in this collection and returns it.
+    ///
+    /// # Example
+    /// ```
+    /// let mut dom = tl::parse("<span contenteditable=\"true\"></span>", Default::default()).unwrap();
+    /// let element = dom.nodes_mut()[0].as_tag_mut().unwrap();
+    /// let attributes = element.attributes_mut();
+    /// let attr = attributes.remove_value("contenteditable");
+    /// assert_eq!(attr, Some("true".into()));
+    /// assert_eq!(attributes.len(), 1);
+    /// ```
+    pub fn remove_value<B>(&mut self, key: B) -> Option<Bytes<'a>>
+    where
+        B: Into<Bytes<'a>>,
+    {
+        let key: Bytes = key.into();
+
+        match key.as_bytes() {
+            b"id" => self.id.take(),
+            b"class" => self.class.take(),
+            _ => self.raw.get_mut(&key).and_then(mem::take),
         }
     }
 
@@ -269,7 +328,7 @@ impl<'a> HTMLTag<'a> {
 
     /// Returns the boundaries/position `(start, end)` of this HTML tag in the source string.
     ///
-    /// ## Example
+    /// # Example
     /// ```
     /// let dom = tl::parse("<p><span>hello</span></p>", Default::default()).unwrap();
     /// let parser = dom.parser();
