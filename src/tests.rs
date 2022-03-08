@@ -627,3 +627,28 @@ fn boundaries() {
     let boundary = span.boundaries(dom.parser());
     assert_eq!(boundary, (5, 15));
 }
+
+#[test]
+fn attributes_remove_inner_html() {
+    let mut dom = parse(
+        "<span contenteditable=\"true\">testing</a>",
+        Default::default(),
+    )
+    .unwrap();
+
+    dom.nodes_mut()[0]
+        .as_tag_mut()
+        .unwrap()
+        .attributes_mut()
+        .remove_value("contenteditable");
+
+    assert_eq!(dom.inner_html(), "<span contenteditable>testing</span>");
+
+    dom.nodes_mut()[0]
+        .as_tag_mut()
+        .unwrap()
+        .attributes_mut()
+        .remove("contenteditable");
+
+    assert_eq!(dom.inner_html(), "<span>testing</span>");
+}
