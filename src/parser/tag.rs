@@ -330,24 +330,26 @@ impl<'a> HTMLTag<'a> {
     ///
     /// # Example
     /// ```
-    /// let dom = tl::parse("<p><span>hello</span></p>", Default::default()).unwrap();
+    /// let source = "<p><span>hello</span></p>";
+    /// let dom = tl::parse(source, Default::default()).unwrap();
     /// let parser = dom.parser();
     /// let span = dom.nodes().iter().filter_map(|n| n.as_tag()).find(|n| n.name() == "span").unwrap();
     /// let (start, end) = span.boundaries(parser);
     /// assert_eq!((start, end), (3, 20));
+    /// assert_eq!(&source[start..=end], "<span>hello</span>");
     /// ```
     pub fn boundaries(&self, parser: &Parser<'a>) -> (usize, usize) {
         let raw = self._raw.as_bytes();
         let input = parser.stream.data().as_ptr();
         let start = raw.as_ptr();
         let offset = start as usize - input as usize;
-        let end = offset + raw.len();
+        let end = offset + raw.len() - 1;
         (offset, end)
     }
 
-    /// Returns the contained text of this element, excluding any markup
+    /// Returns the contained text of this element, excluding any markup.
     /// Equivalent to [Element#innerText](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerText) in browsers)
-    /// This function may not allocate memory for a new string as it can just return the part of the tag that doesn't have markup
+    /// This function may not allocate memory for a new string as it can just return the part of the tag that doesn't have markup.
     /// For tags that *do* have more than one subnode, this will allocate memory
     pub fn inner_text<'p>(&self, parser: &'p Parser<'a>) -> Cow<'p, str> {
         let len = self._children.len();

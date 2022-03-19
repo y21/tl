@@ -226,7 +226,9 @@ impl<'a> Parser<'a> {
 
     fn read_end(&mut self) {
         self.stream.advance();
-        self.read_ident();
+        self.read_to(b'>');
+        self.stream.expect_and_skip_cond(b'>');
+
         if let Some(handle) = self.stack.pop() {
             let tag = self
                 .tags
@@ -266,7 +268,6 @@ impl<'a> Parser<'a> {
                 self.ids.insert(bytes.clone(), handle);
             }
         }
-        self.stream.advance(); // >
     }
 
     #[cold]
