@@ -10,6 +10,7 @@ pub mod inline;
 mod parser;
 /// Query selector API
 pub mod queryselector;
+mod simd;
 mod stream;
 #[cfg(test)]
 mod tests;
