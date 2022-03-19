@@ -652,3 +652,33 @@ fn attributes_remove_inner_html() {
 
     assert_eq!(dom.inner_html(), "<span>testing</span>");
 }
+
+#[test]
+fn tag_raw() {
+    let input = "<p>abcd</p>";
+
+    let vdom = parse(input, Default::default()).unwrap();
+    let first_tag = vdom.children()[0]
+        .get(vdom.parser())
+        .unwrap()
+        .as_tag()
+        .unwrap();
+
+    let from_raw = first_tag.raw().try_as_utf8_str().unwrap();
+    assert_eq!(from_raw, "<p>abcd</p>");
+}
+
+#[test]
+fn tag_raw_abrupt_stop() {
+    let input = "<p>abcd</p";
+
+    let vdom = parse(input, Default::default()).unwrap();
+    let first_tag = vdom.children()[0]
+        .get(vdom.parser())
+        .unwrap()
+        .as_tag()
+        .unwrap();
+
+    let from_raw = first_tag.raw().try_as_utf8_str().unwrap();
+    assert_eq!(from_raw, "<p>abcd</p");
+}

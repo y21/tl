@@ -1,5 +1,8 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.7.3
+- Fixed `HTMLTag::raw()` returning one byte less than it should have. See [y21/tl#31](https://github.com/y21/tl/issues/31).
+
 # 0.7.2
 - Add `Attributes::contains(key)` to check if an attribute exists.
 - Add `Attributes::remove(key)` to remove an attribute.
