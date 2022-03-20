@@ -219,76 +219,73 @@ fn mutate_dom() {
     assert_eq!(attr.get("src"), Some(Some(&"world.png".into())));
 }
 
-#[cfg(feature = "simd")]
 mod simd {
     // These tests make sure that SIMD functions do the right thing
 
-    use crate::util;
-
     #[test]
     fn matches_case_insensitive_test() {
-        assert!(util::matches_case_insensitive(b"hTmL", *b"html"));
-        assert!(!util::matches_case_insensitive(b"hTmLs", *b"html"));
-        assert!(!util::matches_case_insensitive(b"hTmy", *b"html"));
-        assert!(!util::matches_case_insensitive(b"/Tmy", *b"html"));
+        assert!(crate::simd::matches_case_insensitive(b"hTmL", *b"html"));
+        assert!(!crate::simd::matches_case_insensitive(b"hTmLs", *b"html"));
+        assert!(!crate::simd::matches_case_insensitive(b"hTmy", *b"html"));
+        assert!(!crate::simd::matches_case_insensitive(b"/Tmy", *b"html"));
     }
 
     #[test]
     fn string_search() {
-        assert_eq!(util::find_fast(b"a", b' '), None);
-        assert_eq!(util::find_fast(b"", b' '), None);
-        assert_eq!(util::find_fast(b"a ", b' '), Some(1));
-        assert_eq!(util::find_fast(b"abcd ", b' '), Some(4));
-        assert_eq!(util::find_fast(b"ab cd ", b' '), Some(2));
-        assert_eq!(util::find_fast(b"abcdefgh ", b' '), Some(8));
-        assert_eq!(util::find_fast(b"abcdefghi ", b' '), Some(9));
-        assert_eq!(util::find_fast(b"abcdefghi", b' '), None);
-        assert_eq!(util::find_fast(b"abcdefghiabcdefghi .", b' '), Some(18));
-        assert_eq!(util::find_fast(b"abcdefghiabcdefghi.", b' '), None);
+        assert_eq!(crate::simd::find(b"a", b' '), None);
+        assert_eq!(crate::simd::find(b"", b' '), None);
+        assert_eq!(crate::simd::find(b"a ", b' '), Some(1));
+        assert_eq!(crate::simd::find(b"abcd ", b' '), Some(4));
+        assert_eq!(crate::simd::find(b"ab cd ", b' '), Some(2));
+        assert_eq!(crate::simd::find(b"abcdefgh ", b' '), Some(8));
+        assert_eq!(crate::simd::find(b"abcdefghi ", b' '), Some(9));
+        assert_eq!(crate::simd::find(b"abcdefghi", b' '), None);
+        assert_eq!(crate::simd::find(b"abcdefghiabcdefghi .", b' '), Some(18));
+        assert_eq!(crate::simd::find(b"abcdefghiabcdefghi.", b' '), None);
 
         let count = if cfg!(miri) { 500usize } else { 1000usize };
 
         let long = "a".repeat(count) + "b";
-        assert_eq!(util::find_fast(long.as_bytes(), b'b'), Some(count));
+        assert_eq!(crate::simd::find(long.as_bytes(), b'b'), Some(count));
     }
 
     #[test]
     fn string_search_4() {
         const NEEDLE: [u8; 4] = [b'a', b'b', b'c', b'd'];
 
-        assert_eq!(util::find_fast_4(b"e", NEEDLE), None);
-        assert_eq!(util::find_fast_4(b"a", NEEDLE), Some(0));
-        assert_eq!(util::find_fast_4(b"ea", NEEDLE), Some(1));
-        assert_eq!(util::find_fast_4(b"ef", NEEDLE), None);
-        assert_eq!(util::find_fast_4(b"ef a", NEEDLE), Some(3));
-        assert_eq!(util::find_fast_4(b"ef g", NEEDLE), None);
-        assert_eq!(util::find_fast_4(b"ef ghijk", NEEDLE), None);
-        assert_eq!(util::find_fast_4(b"ef ghijkl", NEEDLE), None);
-        assert_eq!(util::find_fast_4(b"ef ghijkla", NEEDLE), Some(9));
-        assert_eq!(util::find_fast_4(b"ef ghiajklm", NEEDLE), Some(6));
-        assert_eq!(util::find_fast_4(b"ef ghibjklm", NEEDLE), Some(6));
-        assert_eq!(util::find_fast_4(b"ef ghicjklm", NEEDLE), Some(6));
-        assert_eq!(util::find_fast_4(b"ef ghidjklm", NEEDLE), Some(6));
-        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstua", NEEDLE), Some(18));
-        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstub", NEEDLE), Some(18));
-        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstuc", NEEDLE), Some(18));
-        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstud", NEEDLE), Some(18));
-        assert_eq!(util::find_fast_4(b"ef ghijklmnopqrstu", NEEDLE), None);
+        assert_eq!(crate::simd::find4(b"e", NEEDLE), None);
+        assert_eq!(crate::simd::find4(b"a", NEEDLE), Some(0));
+        assert_eq!(crate::simd::find4(b"ea", NEEDLE), Some(1));
+        assert_eq!(crate::simd::find4(b"ef", NEEDLE), None);
+        assert_eq!(crate::simd::find4(b"ef a", NEEDLE), Some(3));
+        assert_eq!(crate::simd::find4(b"ef g", NEEDLE), None);
+        assert_eq!(crate::simd::find4(b"ef ghijk", NEEDLE), None);
+        assert_eq!(crate::simd::find4(b"ef ghijkl", NEEDLE), None);
+        assert_eq!(crate::simd::find4(b"ef ghijkla", NEEDLE), Some(9));
+        assert_eq!(crate::simd::find4(b"ef ghiajklm", NEEDLE), Some(6));
+        assert_eq!(crate::simd::find4(b"ef ghibjklm", NEEDLE), Some(6));
+        assert_eq!(crate::simd::find4(b"ef ghicjklm", NEEDLE), Some(6));
+        assert_eq!(crate::simd::find4(b"ef ghidjklm", NEEDLE), Some(6));
+        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstua", NEEDLE), Some(18));
+        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstub", NEEDLE), Some(18));
+        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstuc", NEEDLE), Some(18));
+        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstud", NEEDLE), Some(18));
+        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstu", NEEDLE), None);
     }
 
     #[test]
     #[rustfmt::skip]
     fn search_non_ident() {
-        assert_eq!(util::search_non_ident_fast(b"this-is-a-very-long-identifier<"), Some(30));
-        assert_eq!(util::search_non_ident_fast(b"0123456789Abc_-<"), Some(15));
-        assert_eq!(util::search_non_ident_fast(b"0123456789Abc-<"), Some(14));
-        assert_eq!(util::search_non_ident_fast(b"0123456789Abcdef_-<"), Some(18));
-        assert_eq!(util::search_non_ident_fast(b""), None);
-        assert_eq!(util::search_non_ident_fast(b"short"), None);
-        assert_eq!(util::search_non_ident_fast(b"short_<"), Some(6));
-        assert_eq!(util::search_non_ident_fast(b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"), None);
-        assert_eq!(util::search_non_ident_fast(b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_<"), Some(64));
-        assert_eq!(util::search_non_ident_fast(b"0123456789ab<defghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_<"), Some(12));
+        assert_eq!(crate::simd::search_non_ident(b"this-is-a-very-long-identifier<"), Some(30));
+        assert_eq!(crate::simd::search_non_ident(b"0123456789Abc_-<"), Some(15));
+        assert_eq!(crate::simd::search_non_ident(b"0123456789Abc-<"), Some(14));
+        assert_eq!(crate::simd::search_non_ident(b"0123456789Abcdef_-<"), Some(18));
+        assert_eq!(crate::simd::search_non_ident(b""), None);
+        assert_eq!(crate::simd::search_non_ident(b"short"), None);
+        assert_eq!(crate::simd::search_non_ident(b"short_<"), Some(6));
+        assert_eq!(crate::simd::search_non_ident(b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"), None);
+        assert_eq!(crate::simd::search_non_ident(b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_<"), Some(64));
+        assert_eq!(crate::simd::search_non_ident(b"0123456789ab<defghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_<"), Some(12));
     }
 }
 

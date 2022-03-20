@@ -3,9 +3,9 @@ use super::{
     handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
-use crate::{bytes::Bytes, inline::vec::InlineVec, ParseError};
+use crate::InnerNodeHandle;
+use crate::{bytes::Bytes, inline::vec::InlineVec, simd, ParseError};
 use crate::{stream::Stream, ParserOptions};
-use crate::{util, InnerNodeHandle};
 use std::collections::HashMap;
 
 /// A list of HTML nodes
@@ -81,11 +81,7 @@ impl<'a> Parser<'a> {
         let start = self.stream.idx;
         let bytes = &self.stream.data()[start..];
 
-        #[cfg(feature = "simd")]
-        let end = util::find_fast(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
-
-        #[cfg(not(feature = "simd"))]
-        let end = util::find_slow(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
+        let end = simd::find(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         self.stream.slice(start, start + end)
@@ -95,11 +91,7 @@ impl<'a> Parser<'a> {
         let start = self.stream.idx;
         let bytes = &self.stream.data()[start..];
 
-        #[cfg(feature = "simd")]
-        let end = util::find_fast_4(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
-
-        #[cfg(not(feature = "simd"))]
-        let end = util::find_multi_slow(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
+        let end = simd::find4(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         self.stream.slice(start, start + end)
@@ -124,11 +116,7 @@ impl<'a> Parser<'a> {
         let start = self.stream.idx;
         let bytes = &self.stream.data()[start..];
 
-        #[cfg(feature = "simd")]
-        let end = util::search_non_ident_fast(bytes)?;
-
-        #[cfg(not(feature = "simd"))]
-        let end = util::search_non_ident_slow(bytes)?;
+        let end = simd::search_non_ident(bytes)?;
 
         self.stream.idx += end;
         Some(self.stream.slice(start, start + end))
@@ -186,7 +174,7 @@ impl<'a> Parser<'a> {
 
             let cur = self.stream.current_cpy()?;
 
-            if util::is_closing(cur) {
+            if simd::is_closing(cur) {
                 break;
             }
 
@@ -200,7 +188,7 @@ impl<'a> Parser<'a> {
                 };
             }
 
-            if !util::is_closing(self.stream.current_cpy()?) {
+            if !simd::is_closing(self.stream.current_cpy()?) {
                 self.stream.advance();
             }
         }
@@ -291,10 +279,10 @@ impl<'a> Parser<'a> {
 
             self.skip_whitespaces();
 
-            if util::matches_case_insensitive(tag, *b"doctype") {
+            if simd::matches_case_insensitive(tag, *b"doctype") {
                 let doctype = self.read_ident()?;
 
-                let html5 = util::matches_case_insensitive(doctype, *b"html");
+                let html5 = simd::matches_case_insensitive(doctype, *b"html");
 
                 if html5 {
                     self.version = Some(HTMLVersion::HTML5);

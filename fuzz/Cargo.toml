@@ -13,6 +13,7 @@ libfuzzer-sys = "0.4"
 
 [dependencies.tl]
 path = ".."
+features = ["__INTERNALS_DO_NOT_USE"] # we use it for fuzzing internals
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -33,5 +34,11 @@ doc = false
 [[bin]]
 name = "parse_mut"
 path = "fuzz_targets/parse_mut.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "find"
+path = "fuzz_targets/find.rs"
 test = false
 doc = false

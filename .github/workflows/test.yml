@@ -38,3 +38,14 @@ jobs:
         with:
           command: miri
           args: test
+
+      - name: Bench stable
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
+
+      - name: Bench SIMD
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
+          args: --features simd

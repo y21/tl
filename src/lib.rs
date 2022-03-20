@@ -16,6 +16,12 @@ mod tests;
 mod util;
 mod vdom;
 
+#[doc(hidden)]
+#[cfg(feature = "__INTERNALS_DO_NOT_USE")]
+pub mod simd;
+#[cfg(not(feature = "__INTERNALS_DO_NOT_USE"))]
+mod simd;
+
 pub use bytes::Bytes;
 pub use errors::ParseError;
 pub use parser::*;
