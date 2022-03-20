@@ -5,7 +5,6 @@ tl is a fast HTML parser written in pure Rust. <br />
 - [Examples](#examples)
 - [SIMD-accelerated parsing](#simd-accelerated-parsing)
 - [Benchmarks](#benchmarks)
-- [Design](#design)
 
 ## Usage
 Add `tl` to your dependencies.
