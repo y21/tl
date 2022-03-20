@@ -11,19 +11,16 @@ tl is a fast HTML parser written in pure Rust. <br />
 Add `tl` to your dependencies.
 ```toml
 [dependencies]
-tl = "0.7.3"
-# or, if you need SIMD
+tl = "0.7.4"
+# or, with explicit SIMD support
 # (requires a nightly compiler!)
-tl = { version = "0.7.3", features = ["simd"] }
+tl = { version = "0.7.4", features = ["simd"] }
 ```
 
 The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting AST, although in the future this will likely be customizable, in case you need explicit error checking.
 
-## Examples
-Finding an element by its id attribute and printing the inner text:
 ```rust
-let input = r#"<p id="text">Hello</p>"#;
-let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
+let dom = tl::parse(r#"<p id="text">Hello</p>"#, tl::ParserOptions::default()).unwrap();
 let parser = dom.parser();
 let element = dom.get_element_by_id("text")
   .expect("Failed to find element")
@@ -33,19 +30,23 @@ let element = dom.get_element_by_id("text")
 assert_eq!(element.inner_text(parser), "Hello");
 ```
 
-Finding a tag using the query selector API:
+## Examples
+<details>
+  <summary>Finding a tag using the query selector API</summary>
+
 ```rust
-let input = r#"<div><img src="cool-image.png" /></div>"#;
-let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
+let dom = tl::parse(r#"<div><img src="cool-image.png" /></div>"#, tl::ParserOptions::default()).unwrap();
 let img = dom.query_selector("img[src]").unwrap().next();
     
 assert!(img.is_some());
 ```
+</details>
 
-Iterating over the subnodes of an HTML document:
+<details>
+  <summary>Iterating over the subnodes of an HTML document</summary>
+
 ```rust
-let input = r#"<div><img src="cool-image.png" /></div>"#;
-let dom = tl::parse(input, tl::ParserOptions::default()).unwrap();
+let dom = tl::parse(r#"<div><img src="cool-image.png" /></div>"#, tl::ParserOptions::default()).unwrap();
 let img = dom.nodes()
   .iter()
   .find(|node| {
@@ -54,8 +55,11 @@ let img = dom.nodes()
     
 assert!(img.is_some());
 ```
+</details>
 
-Mutating the `href` attribute of an anchor tag:
+<details>
+  <summary>Mutating the `href` attribute of an anchor tag:</summary>
+
 > In a real world scenario, you would want to handle errors properly instead of unwrapping.
 ```rust
 let input = r#"<div><a href="/about">About</a></div>"#;
@@ -83,9 +87,13 @@ attributes.get_mut("href")
 
 assert_eq!(attributes.get("href").flatten(), Some(&"http://localhost/about".into()));
 ```
+</details>
+
 
 ## SIMD-accelerated parsing
-This crate has optimized parsing functions which make use of SIMD. These are disabled by default and must be enabled explicitly by passing the `simd` feature flag due to the unstable feature `portable_simd`. This requires a **nightly** compiler!
+This crate has utility functions used by the parser which make use of SIMD (e.g. finding a specific byte by looking at the next 16 bytes at once, instead of going through the string one by one). These are disabled by default and must be enabled explicitly by passing the `simd` feature flag due to the unstable feature `portable_simd`. This requires a **nightly** compiler!
+
+If the `simd` feature is not enabled, it will fall back to stable alternatives that don't explicitly use SIMD intrinsics, but are still decently well optimized, using techniques such as manual loop unrolling to remove boundary checks and other branches by a factor of 16, which also helps LLVM further optimize the code and potentially generate SIMD instructions by itself.
 
 ## Benchmarks
 Results for parsing a ~320KB [HTML document](https://github.com/y21/rust-html-parser-benchmark/blob/80d24a260ab9377bc704aa0b12657539aeaa4777/data/wikipedia.html). Benchmarked using criterion on codespaces hardware.
@@ -100,9 +108,3 @@ htmlparser    17.764 ms       17.608 MiB/s
 ```
 
 [Source](https://github.com/y21/rust-html-parser-benchmark/tree/53238f68bbb57adc8dffdd245693ca1caa89cf4f)
-
-## Design
-Due to the nature of zero-copy parsers, the string must be kept alive for the entire lifetime of the parser/dom.
-If this is not acceptable or simply not possible in your case, you can call `tl::parse_owned()`.
-This goes through the same steps as `tl::parse()` but returns an `VDomGuard` instead of a `VDom`.
-The difference is that `VDomGuard` carefully creates a self-referential struct in which it stores the input string, so you can keep the `VDomGuard` as long as you want and move it around as much as you want.
