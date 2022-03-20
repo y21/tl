@@ -1,5 +1,6 @@
 use crate::simd::fallback;
 
+/// Optimized function for checking if a byte is a closing tag
 #[inline]
 pub fn is_closing(needle: u8) -> bool {
     let eq1 = needle == b'/';
@@ -8,71 +9,46 @@ pub fn is_closing(needle: u8) -> bool {
     eq1 | eq2
 }
 
-pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
-    #[inline(never)]
-    #[cold]
-    fn unlikely_search(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
-        fallback::find_multi(haystack, needle)
-    }
+/// Optimized, stable function for finding any byte in `haystack`
+pub fn find_multi<const N: usize>(haystack: &[u8], needle: [u8; N]) -> Option<usize> {
+    let mut index = 0;
 
-    let len = haystack.len();
-    let ptr = haystack.as_ptr();
-    if len < 16 {
-        return unlikely_search(haystack, needle);
-    }
-
-    let mut i = 0usize;
-    while i <= len - 16 {
+    for (i, chunk) in haystack.chunks_exact(16).enumerate() {
+        index = i * 16;
         let mut mask = 0u16;
 
-        for j in 0..16 {
-            let c = unsafe { *ptr.add(i + j) };
-            mask |= ((c == needle[0]) as u16) << j;
-            mask |= ((c == needle[1]) as u16) << j;
-            mask |= ((c == needle[2]) as u16) << j;
-            mask |= ((c == needle[3]) as u16) << j;
+        for (j, &byte) in chunk.into_iter().enumerate() {
+            for k in 0..N {
+                mask |= ((byte == needle[k]) as u16) << j;
+            }
         }
 
         if mask != 0 {
-            let index = mask.trailing_zeros() as usize;
-            return Some(i + index);
+            let local_index = mask.trailing_zeros() as usize;
+            return Some(index + local_index);
         }
-
-        i += 16;
     }
 
-    fallback::find_multi(&haystack[i..], needle).map(|x| x + i)
+    fallback::find_multi(&haystack[index..], needle).map(|x| x + index)
 }
 
+/// Optimized, stable function for finding a byte in `haystack`
 pub fn find(haystack: &[u8], needle: u8) -> Option<usize> {
-    #[inline(never)]
-    #[cold]
-    fn unlikely_search(haystack: &[u8], needle: u8) -> Option<usize> {
-        fallback::find(haystack, needle)
-    }
+    let mut index = 0;
 
-    let len = haystack.len();
-    let ptr = haystack.as_ptr();
-    if len < 16 {
-        return unlikely_search(haystack, needle);
-    }
-
-    let mut i = 0usize;
-    while i <= len - 16 {
+    for (i, chunk) in haystack.chunks_exact(16).enumerate() {
+        index = i * 16;
         let mut mask = 0u16;
 
-        for j in 0..16 {
-            let c = unsafe { *ptr.add(i + j) };
-            mask |= ((c == needle) as u16) << j;
+        for (j, &byte) in chunk.into_iter().enumerate() {
+            mask |= ((byte == needle) as u16) << j;
         }
 
         if mask != 0 {
-            let index = mask.trailing_zeros() as usize;
-            return Some(i + index);
+            let local_index = mask.trailing_zeros() as usize;
+            return Some(index + local_index);
         }
-
-        i += 16;
     }
 
-    fallback::find(&haystack[i..], needle).map(|x| x + i)
+    fallback::find(&haystack[index..], needle).map(|x| x + index)
 }

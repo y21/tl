@@ -10,6 +10,10 @@ pub mod inline;
 mod parser;
 /// Query selector API
 pub mod queryselector;
+/// Byte search/manipulation utility functions used by the parser
+#[cfg(feature = "__INTERNALS_DO_NOT_USE")]
+pub mod simd;
+#[cfg(not(feature = "__INTERNALS_DO_NOT_USE"))]
 mod simd;
 mod stream;
 #[cfg(test)]

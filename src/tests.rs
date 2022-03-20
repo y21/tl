@@ -219,11 +219,8 @@ fn mutate_dom() {
     assert_eq!(attr.get("src"), Some(Some(&"world.png".into())));
 }
 
-#[cfg(feature = "simd")]
 mod simd {
     // These tests make sure that SIMD functions do the right thing
-
-    use crate::util;
 
     #[test]
     fn matches_case_insensitive_test() {

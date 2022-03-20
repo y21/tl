@@ -2,6 +2,7 @@ use std::{ptr, simd::*};
 
 use crate::simd::fallback;
 
+/// Optimized function for finding a byte in `haystack`
 pub fn find(haystack: &[u8], needle: u8) -> Option<usize> {
     #[inline(never)]
     #[cold]
@@ -35,6 +36,7 @@ pub fn find(haystack: &[u8], needle: u8) -> Option<usize> {
     fallback::find(&haystack[i..], needle).map(|x| i + x)
 }
 
+/// Optimized function for finding one of 4 bytes in `haystack`
 pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
     #[inline(never)]
     #[cold]
@@ -76,6 +78,7 @@ pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
     fallback::find_multi(&haystack[i..], needle).map(|x| i + x)
 }
 
+/// Optimized function for searching for the first non-identifier
 pub fn search_non_ident(haystack: &[u8]) -> Option<usize> {
     #[inline(never)]
     #[cold]
@@ -134,6 +137,7 @@ pub fn search_non_ident(haystack: &[u8]) -> Option<usize> {
     fallback::search_non_ident(&haystack[i..]).map(|x| i + x)
 }
 
+/// Optimized function for checking if a byte is a closing tag
 #[inline]
 pub fn is_closing(needle: u8) -> bool {
     let sc = u8x4::from_array([b'/', b'>', 0, 0]);
