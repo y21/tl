@@ -1,5 +1,10 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.7.4
+- Restructure internals (mainly SIMD functions)
+- Add fuzzing targets for internals
+- Optimize stable parser (adds stable alternatives when the `simd` feature isn't set)
+
 # 0.7.3
 - Fixed `HTMLTag::raw()` returning one byte less than it should have. See [y21/tl#31](https://github.com/y21/tl/issues/31).
 
