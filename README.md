@@ -6,6 +6,11 @@ tl is a fast HTML parser written in pure Rust. <br />
 - [SIMD-accelerated parsing](#simd-accelerated-parsing)
 - [Benchmarks](#benchmarks)
 
+This crate (currently) does *not* strictly follow the full specification of the HTML standard, however this usually is not a problem for most use cases. This crate generally attempts to support most "sane" HTML. Not being limited by a specification allows for more optimization opportunities.
+If you need a parser that can (very quickly) parse the typical HTML document and you need a simple API to work with the DOM, give this crate a try.
+
+If you need a parser that closely follows the standard, consider using [html5ever](https://github.com/servo/html5ever), [lol-html](https://github.com/cloudflare/lol-html), or [html5gum](https://github.com/untitaker/html5gum).
+
 ## Usage
 Add `tl` to your dependencies.
 ```toml
@@ -16,7 +21,7 @@ tl = "0.7.4"
 tl = { version = "0.7.4", features = ["simd"] }
 ```
 
-The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting AST, although in the future this will likely be customizable, in case you need explicit error checking.
+The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting tree.
 
 ```rust
 let dom = tl::parse(r#"<p id="text">Hello</p>"#, tl::ParserOptions::default()).unwrap();
@@ -95,15 +100,18 @@ This crate has utility functions used by the parser which make use of SIMD (e.g.
 If the `simd` feature is not enabled, it will fall back to stable alternatives that don't explicitly use SIMD intrinsics, but are still decently well optimized, using techniques such as manual loop unrolling to remove boundary checks and other branches by a factor of 16, which also helps LLVM further optimize the code and potentially generate SIMD instructions by itself.
 
 ## Benchmarks
-Results for parsing a ~320KB [HTML document](https://github.com/y21/rust-html-parser-benchmark/blob/80d24a260ab9377bc704aa0b12657539aeaa4777/data/wikipedia.html). Benchmarked using criterion on codespaces hardware.
-```notrust
-              time            thrpt
-tl + simd     628.23 us       497.87 MiB/s
-htmlstream    2.2786 ms       137.48 MiB/s
-rusthtml      3.3881 ms       92.317 MiB/s
-html5ever     5.7900 ms       54.021 MiB/s
-rphtml        6.0154 ms       51.997 MiB/s
-htmlparser    17.764 ms       17.608 MiB/s
-```
+Results for parsing a ~320KB [HTML document](https://github.com/y21/rust-html-parser-benchmark/blob/c45c89871a34396d6818c73c51275241dee8ad34/data/wikipedia.html). Benchmarked using [criterion](https://crates.io/crates/criterion).
 
-[Source](https://github.com/y21/rust-html-parser-benchmark/tree/53238f68bbb57adc8dffdd245693ca1caa89cf4f)
+**Note:** Some HTML parsers listed closely follow the specification while others don't, which greatly impacts performance as the specification limits what can and can't be done.
+Comparing the performance of a parser that doesn't follow the specification to one that does isn't fair and doesn't yield meaningful results, but it can be interesting to see what the theoretical difference is.
+
+```notrust
+              time            thrpt             follows spec
+tl¹           629.78 us       496.65 MiB/s      ❌
+lol_html      788.91 us       396.47 MiB/s      ✅
+htmlstream    2.2786 ms       137.48 MiB/s      ❌
+html5ever     6.2233 ms       50.276 MiB/s      ✅
+```
+¹ - `simd` feature enabled
+
+[Source](https://github.com/y21/rust-html-parser-benchmark/tree/c45c89871a34396d6818c73c51275241dee8ad34)
