@@ -679,3 +679,33 @@ fn tag_raw_abrupt_stop() {
     let from_raw = first_tag.raw().try_as_utf8_str().unwrap();
     assert_eq!(from_raw, "<p>abcd</p");
 }
+
+#[test]
+fn single_tags() {
+    let dom = parse(".<br>.", Default::default()).unwrap();
+    assert_eq!(dom.nodes()[1].as_tag().unwrap().raw().as_bytes(), b"<br>");
+
+    let dom = parse(".<br >.", Default::default()).unwrap();
+    assert_eq!(dom.nodes()[1].as_tag().unwrap().raw().as_bytes(), b"<br >");
+
+    let dom = parse(".<br />.", Default::default()).unwrap();
+    assert_eq!(dom.nodes()[1].as_tag().unwrap().raw().as_bytes(), b"<br />");
+
+    let dom = parse(".<br\n/>.", Default::default()).unwrap();
+    assert_eq!(
+        dom.nodes()[1].as_tag().unwrap().raw().as_bytes(),
+        b"<br\n/>"
+    );
+
+    let dom = parse(".<br\n x=\"y\"/>.", Default::default()).unwrap();
+    assert_eq!(
+        dom.nodes()[1].as_tag().unwrap().raw().as_bytes(),
+        b"<br\n x=\"y\"/>"
+    );
+
+    let dom = parse(".<br\n x=\"y\" y=\"z\"/>.", Default::default()).unwrap();
+    assert_eq!(
+        dom.nodes()[1].as_tag().unwrap().raw().as_bytes(),
+        b"<br\n x=\"y\" y=\"z\"/>"
+    );
+}

@@ -147,7 +147,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_attribute(&mut self) -> Option<(&'a [u8], Option<&'a [u8]>)> {
-        let name = self.read_ident()?;
+        let name = self.read_to4([b' ', b'=', b'\n', b'\t']);
         self.skip_whitespaces();
 
         let has_value = self.stream.expect_and_skip_cond(b'=');
@@ -309,7 +309,7 @@ impl<'a> Parser<'a> {
                 self.read_markdown();
             }
             _ => {
-                let name = self.read_ident()?;
+                let name = self.read_to4([b' ', b'\n', b'/', b'>']);
                 self.skip_whitespaces();
 
                 let attr = self.parse_attributes()?;
