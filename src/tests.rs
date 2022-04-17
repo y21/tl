@@ -99,6 +99,21 @@ fn html5() {
 }
 
 #[test]
+fn ignore_void_closing_tags() {
+    let input = r#"
+        <head>
+            <base href='single_quoted_item'></base>
+        </head>
+    "#;
+
+    let dom = parse(input, ParserOptions::default()).unwrap();
+    let head_tag = force_as_tag(dom.children()[1].get(dom.parser()).unwrap());
+
+    assert_eq!(head_tag.name(), "head");
+    assert_eq!(head_tag.children().top().len(), 3) // 3 newlines, but no base tag
+}
+
+#[test]
 fn nested_inner_text() {
     let dom = parse(
         "<p>hello <p>nested element</p></p>",

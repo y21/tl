@@ -116,7 +116,10 @@ impl<'a> Parser<'a> {
         let start = self.stream.idx;
         let bytes = &self.stream.data()[start..];
 
-        let end = simd::search_non_ident(bytes)?;
+        // If we do not find any characters that are not identifiers
+        // then we are probably at the end of the stream
+        let end = simd::search_non_ident(bytes)
+            .unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         Some(self.stream.slice(start, start + end))
@@ -212,8 +215,18 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn read_end(&mut self) {
+    fn read_end(&mut self) -> Option<()> {
+        self.read_to(b'/');
         self.stream.advance();
+
+        self.skip_whitespaces();
+
+        let closing_tag_name = self.read_ident()?;
+
+        if crate::constants::VOID_TAGS.contains(&closing_tag_name) {
+            return None;
+        }
+
         self.read_to(b'>');
         self.stream.expect_and_skip_cond(b'>');
 
@@ -256,6 +269,8 @@ impl<'a> Parser<'a> {
                 self.ids.insert(bytes.clone(), handle);
             }
         }
+
+        Some(())
     }
 
     #[cold]
@@ -304,7 +319,7 @@ impl<'a> Parser<'a> {
         let cur = self.stream.current_cpy()?;
 
         match cur {
-            b'/' => self.read_end(),
+            b'/' => self.read_end()?,
             b'!' => {
                 self.read_markdown();
             }
@@ -335,7 +350,7 @@ impl<'a> Parser<'a> {
                     self.stack.push(this);
                 }
             }
-        }
+        };
 
         Some(())
     }
