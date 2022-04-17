@@ -223,12 +223,18 @@ impl<'a> Parser<'a> {
 
         let closing_tag_name = self.read_ident()?;
 
-        if crate::constants::VOID_TAGS.contains(&closing_tag_name) {
-            return None;
-        }
-
         self.read_to(b'>');
         self.stream.expect_and_skip_cond(b'>');
+
+        let closing_tag_matches_parent = self.stack.last()
+            .and_then(|last_handle| last_handle.get(self))
+            .and_then(|last_item| last_item.as_tag())
+            .and_then(|last_tag| Some(last_tag.name() == closing_tag_name))
+            .unwrap_or(false);
+
+        if !closing_tag_matches_parent {
+            return None
+        }
 
         if let Some(handle) = self.stack.pop() {
             let tag = self

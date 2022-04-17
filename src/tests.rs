@@ -103,14 +103,19 @@ fn ignore_void_closing_tags() {
     let input = r#"
         <head>
             <base href='single_quoted_item'></base>
+            <link rel="stylesheet" type="text/css" href="non-exising"/>
         </head>
     "#;
 
     let dom = parse(input, ParserOptions::default()).unwrap();
     let head_tag = force_as_tag(dom.children()[1].get(dom.parser()).unwrap());
 
+    let base_tag = force_as_tag(head_tag.children().top()[1].get(dom.parser()).unwrap());
+    let link_tag = force_as_tag(head_tag.children().top()[3].get(dom.parser()).unwrap());
+
     assert_eq!(head_tag.name(), "head");
-    assert_eq!(head_tag.children().top().len(), 3) // 3 newlines, but no base tag
+    assert_eq!(base_tag.name(), "base");
+    assert_eq!(link_tag.name(), "link");
 }
 
 #[test]
