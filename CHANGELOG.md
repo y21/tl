@@ -1,5 +1,8 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.7.5
+- Fixed a bug that caused the parser to parse closing tags incorrectly. See [y21/tl#37](https://github.com/y21/tl/issues/37) and [y21/tl#38](https://github.com/y21/tl/pull/38) for more details.
+
 # 0.7.4
 - Restructure internals (mainly SIMD functions)
 - Add fuzzing targets for internals
