@@ -215,22 +215,20 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn read_end(&mut self) -> Option<()> {
+    fn read_end(&mut self) {
         self.stream.advance();
 
-        let closing_tag_name = self.read_ident()?;
-
-        self.read_to(b'>');
+        let closing_tag_name = self.read_to(b'>');
+        
         self.stream.expect_and_skip_cond(b'>');
 
         let closing_tag_matches_parent = self.stack.last()
             .and_then(|last_handle| last_handle.get(self))
             .and_then(|last_item| last_item.as_tag())
-            .and_then(|last_tag| Some(last_tag.name() == closing_tag_name))
-            .unwrap_or(false);
+            .map_or(false, |last_tag| last_tag.name() == closing_tag_name);
 
         if !closing_tag_matches_parent {
-            return None
+            return;
         }
 
         if let Some(handle) = self.stack.pop() {
@@ -272,8 +270,6 @@ impl<'a> Parser<'a> {
                 self.ids.insert(bytes.clone(), handle);
             }
         }
-
-        Some(())
     }
 
     #[cold]
@@ -322,7 +318,7 @@ impl<'a> Parser<'a> {
         let cur = self.stream.current_cpy()?;
 
         match cur {
-            b'/' => self.read_end()?,
+            b'/' => self.read_end(),
             b'!' => {
                 self.read_markdown();
             }
