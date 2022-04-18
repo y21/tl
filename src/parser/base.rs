@@ -216,10 +216,7 @@ impl<'a> Parser<'a> {
     }
 
     fn read_end(&mut self) -> Option<()> {
-        self.read_to(b'/');
         self.stream.advance();
-
-        self.skip_whitespaces();
 
         let closing_tag_name = self.read_ident()?;
 
