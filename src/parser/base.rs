@@ -116,7 +116,10 @@ impl<'a> Parser<'a> {
         let start = self.stream.idx;
         let bytes = &self.stream.data()[start..];
 
-        let end = simd::search_non_ident(bytes)?;
+        // If we do not find any characters that are not identifiers
+        // then we are probably at the end of the stream
+        let end = simd::search_non_ident(bytes)
+            .unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         Some(self.stream.slice(start, start + end))
@@ -214,8 +217,19 @@ impl<'a> Parser<'a> {
 
     fn read_end(&mut self) {
         self.stream.advance();
-        self.read_to(b'>');
+
+        let closing_tag_name = self.read_to(b'>');
+        
         self.stream.expect_and_skip_cond(b'>');
+
+        let closing_tag_matches_parent = self.stack.last()
+            .and_then(|last_handle| last_handle.get(self))
+            .and_then(|last_item| last_item.as_tag())
+            .map_or(false, |last_tag| last_tag.name() == closing_tag_name);
+
+        if !closing_tag_matches_parent {
+            return;
+        }
 
         if let Some(handle) = self.stack.pop() {
             let tag = self
@@ -335,7 +349,7 @@ impl<'a> Parser<'a> {
                     self.stack.push(this);
                 }
             }
-        }
+        };
 
         Some(())
     }
