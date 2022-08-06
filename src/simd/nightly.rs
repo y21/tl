@@ -24,7 +24,7 @@ pub fn find(haystack: &[u8], needle: u8) -> Option<usize> {
         unsafe { ptr::copy_nonoverlapping(ptr.add(i), bytes.as_mut_ptr(), 16) };
 
         let bytes = u8x16::from_array(bytes);
-        let eq = bytes.lanes_eq(needle16).to_int();
+        let eq = bytes.simd_eq(needle16).to_int();
         let num = unsafe { std::mem::transmute::<Simd<i8, 16>, u128>(eq) };
         if num != 0 {
             return Some(i + (num.trailing_zeros() >> 3) as usize);
@@ -62,10 +62,10 @@ pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
 
         let bytes = u8x16::from_array(bytes);
 
-        let eq1 = bytes.lanes_eq(needle16a);
-        let eq2 = bytes.lanes_eq(needle16b);
-        let eq3 = bytes.lanes_eq(needle16c);
-        let eq4 = bytes.lanes_eq(needle16d);
+        let eq1 = bytes.simd_eq(needle16a);
+        let eq2 = bytes.simd_eq(needle16b);
+        let eq3 = bytes.simd_eq(needle16c);
+        let eq4 = bytes.simd_eq(needle16d);
         let or = (eq1 | eq2 | eq3 | eq4).to_int();
         let num = unsafe { std::mem::transmute::<i8x16, u128>(or) };
         if num != 0 {
@@ -108,20 +108,20 @@ pub fn search_non_ident(haystack: &[u8]) -> Option<usize> {
 
         let bytes = u8x16::from_array(bytes);
 
-        let ge_zero = bytes.lanes_ge(needle_zero);
-        let le_nine = bytes.lanes_le(needle_nine);
+        let ge_zero = bytes.simd_ge(needle_zero);
+        let le_nine = bytes.simd_le(needle_nine);
         let digit = ge_zero & le_nine;
 
-        let ge_lc_a = bytes.lanes_ge(needle_lc_a);
-        let le_lc_z = bytes.lanes_le(needle_lc_z);
+        let ge_lc_a = bytes.simd_ge(needle_lc_a);
+        let le_lc_z = bytes.simd_le(needle_lc_z);
         let lowercase = ge_lc_a & le_lc_z;
 
-        let ge_uc_a = bytes.lanes_ge(needle_uc_a);
-        let le_uc_z = bytes.lanes_le(needle_uc_z);
+        let ge_uc_a = bytes.simd_ge(needle_uc_a);
+        let le_uc_z = bytes.simd_le(needle_uc_z);
         let uppercase = ge_uc_a & le_uc_z;
 
-        let eq_minus = bytes.lanes_eq(needle_minus);
-        let eq_underscore = bytes.lanes_eq(needle_underscore);
+        let eq_minus = bytes.simd_eq(needle_minus);
+        let eq_underscore = bytes.simd_eq(needle_underscore);
         let symbol = eq_minus | eq_underscore;
 
         let or = !(digit | lowercase | uppercase | symbol).to_int();
@@ -140,8 +140,5 @@ pub fn search_non_ident(haystack: &[u8]) -> Option<usize> {
 /// Optimized function for checking if a byte is a closing tag
 #[inline]
 pub fn is_closing(needle: u8) -> bool {
-    let sc = u8x4::from_array([b'/', b'>', 0, 0]);
-    let needle = u8x4::splat(needle);
-    let eq = needle.lanes_eq(sc);
-    eq.any()
+    (needle == b'/') | (needle == b'>')
 }
