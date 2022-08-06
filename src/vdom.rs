@@ -131,6 +131,8 @@ impl<'a> VDom<'a> {
 
     /// Returns the contained markup of all of the elements in this DOM.
     ///
+    /// Equivalent to [Element#outerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/outerHTML) in browsers)
+    ///
     /// # Example
     /// ```
     /// let html = r#"<div><p href="/about" id="find-me">Hello world</p></div>"#;
@@ -145,14 +147,14 @@ impl<'a> VDom<'a> {
     ///
     /// element.attributes_mut().get_mut("href").flatten().unwrap().set("/");
     ///
-    /// assert_eq!(dom.inner_html(), r#"<div><p href="/" id="find-me">Hello world</p></div>"#);
+    /// assert_eq!(dom.outer_html(), r#"<div><p href="/" id="find-me">Hello world</p></div>"#);
     /// ```
-    pub fn inner_html(&self) -> String {
+    pub fn outer_html(&self) -> String {
         let mut inner_html = String::with_capacity(self.parser.stream.len());
 
         for node in self.children() {
             let node = node.get(&self.parser).unwrap();
-            inner_html.push_str(&node.inner_html(&self.parser));
+            inner_html.push_str(&node.outer_html(&self.parser));
         }
 
         inner_html

@@ -9,13 +9,31 @@ fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
 }
 
 #[test]
-fn inner_html() {
-    let dom = parse("abc <p>test</p> def", ParserOptions::default()).unwrap();
+fn outer_html() {
+    let dom = parse(
+        "abc <p>test<span>a</span></p> def",
+        ParserOptions::default(),
+    )
+    .unwrap();
     let parser = dom.parser();
 
     let tag = force_as_tag(dom.children()[1].get(parser).unwrap());
 
-    assert_eq!(tag.inner_html(parser), "<p>test</p>");
+    assert_eq!(tag.outer_html(parser), "<p>test<span>a</span></p>");
+}
+
+#[test]
+fn inner_html() {
+    let dom = parse(
+        "abc <p>test<span>a</span></p> def",
+        ParserOptions::default(),
+    )
+    .unwrap();
+    let parser = dom.parser();
+
+    let tag = force_as_tag(dom.children()[1].get(parser).unwrap());
+
+    assert_eq!(tag.inner_html(parser), "test<span>a</span>");
 }
 
 #[test]
@@ -41,7 +59,7 @@ fn get_element_by_id_default() {
 
     let el = force_as_tag(tag.get(dom.parser()).unwrap());
 
-    assert_eq!(el.inner_html(parser), "<p id=\"test\"></p>")
+    assert_eq!(el.outer_html(parser), "<p id=\"test\"></p>")
 }
 
 #[test]
@@ -57,7 +75,7 @@ fn get_element_by_id_tracking() {
 
     let el = force_as_tag(tag.get(dom.parser()).unwrap());
 
-    assert_eq!(el.inner_html(parser), "<p id=\"test\"></p>")
+    assert_eq!(el.outer_html(parser), "<p id=\"test\"></p>")
 }
 
 #[test]
@@ -659,7 +677,7 @@ fn attributes_remove_inner_html() {
         .attributes_mut()
         .remove_value("contenteditable");
 
-    assert_eq!(dom.inner_html(), "<span contenteditable>testing</span>");
+    assert_eq!(dom.outer_html(), "<span contenteditable>testing</span>");
 
     dom.nodes_mut()[0]
         .as_tag_mut()
@@ -667,7 +685,7 @@ fn attributes_remove_inner_html() {
         .attributes_mut()
         .remove("contenteditable");
 
-    assert_eq!(dom.inner_html(), "<span>testing</span>");
+    assert_eq!(dom.outer_html(), "<span>testing</span>");
 }
 
 #[test]
