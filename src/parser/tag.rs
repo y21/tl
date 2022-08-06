@@ -250,6 +250,11 @@ impl<'a> HTMLTag<'a> {
         Children(self)
     }
 
+    /// Returns a mutable wrapper around the children of this HTML tag.
+    pub fn children_mut(&mut self) -> ChildrenMut<'a, '_> {
+        ChildrenMut(self)
+    }
+
     /// Returns the name of this HTML tag
     #[inline]
     pub fn name(&self) -> &Bytes<'a> {
@@ -555,6 +560,20 @@ impl<'a, 'b> Children<'a, 'b> {
         self.boundaries(parser)
             .map(|(start, end)| &parser.tags[start as usize..=end as usize])
             .unwrap_or(&[])
+    }
+}
+
+/// A thin mutable wrapper around the children of [`HTMLTag`]
+#[derive(Debug)]
+pub struct ChildrenMut<'a, 'b>(&'b mut HTMLTag<'a>);
+
+impl<'a, 'b> ChildrenMut<'a, 'b> {
+    /// Returns the topmost, direct children of this tag as a mutable slice.
+    ///
+    /// See [`Children::top`] for more details and examples.
+    #[inline]
+    pub fn top_mut(&mut self) -> &mut RawChildren {
+        &mut self.0._children
     }
 }
 

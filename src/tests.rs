@@ -137,6 +137,28 @@ fn ignore_void_closing_tags() {
 }
 
 #[test]
+pub fn children_mut() {
+    let input = "<head><p>Replace me</p> World</head>";
+
+    let mut dom = parse(input, Default::default()).unwrap();
+    let children = dom.children();
+    let child = children[0]
+        .clone()
+        .get_mut(dom.parser_mut())
+        .unwrap()
+        .as_tag_mut()
+        .unwrap();
+
+    let mut children = child.children_mut();
+    let top = children.top_mut();
+    let handle = top[0].clone();
+    let node = handle.get_mut(dom.parser_mut()).unwrap();
+    *node = Node::Raw("Hello".into());
+
+    assert_eq!(dom.outer_html(), "<head>Hello World</head>");
+}
+
+#[test]
 fn nested_inner_text() {
     let dom = parse(
         "<p>hello <p>nested element</p></p>",
