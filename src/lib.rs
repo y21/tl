@@ -82,9 +82,6 @@ pub fn parse_query_selector(input: &str) -> Option<Selector<'_>> {
 /// The given input string is first leaked and turned into raw pointer, and its lifetime will be promoted to 'static.
 /// Once `VDomGuard` goes out of scope, the string will be freed.
 /// It should not be possible to cause UB in its current form and might become a safe function in the future.
-pub unsafe fn parse_owned<'a>(
-    input: String,
-    options: ParserOptions,
-) -> Result<VDomGuard<'a>, ParseError> {
+pub unsafe fn parse_owned(input: String, options: ParserOptions) -> Result<VDomGuard, ParseError> {
     VDomGuard::parse(input, options)
 }

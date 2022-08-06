@@ -250,6 +250,11 @@ impl<'a> HTMLTag<'a> {
         Children(self)
     }
 
+    /// Returns a mutable wrapper around the children of this HTML tag.
+    pub fn children_mut(&mut self) -> ChildrenMut<'a, '_> {
+        ChildrenMut(self)
+    }
+
     /// Returns the name of this HTML tag
     #[inline]
     pub fn name(&self) -> &Bytes<'a> {
@@ -278,11 +283,11 @@ impl<'a> HTMLTag<'a> {
     ///
     /// ## Limitations
     /// - The order of tag attributes is not guaranteed
-    /// - Spaces within the tag are not guaranteed to be preserved (i.e. `<img      src="">` may become `<img src="">`)
+    /// - Spaces within the tag are not preserved (i.e. `<img      src="">` may become `<img src="">`)
     ///
-    /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
-    pub fn inner_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
-        let mut inner_html = format!("<{}", self._name.as_utf8_str());
+    /// Equivalent to [Element#outerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/outerHTML) in browsers)
+    pub fn outer_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
+        let mut outer_html = format!("<{}", self._name.as_utf8_str());
 
         #[inline]
         fn write_attribute(dest: &mut String, k: Cow<str>, v: Option<Cow<str>>) {
@@ -300,21 +305,38 @@ impl<'a> HTMLTag<'a> {
         let attr = self.attributes();
 
         for (k, v) in attr.iter() {
-            write_attribute(&mut inner_html, k, v);
+            write_attribute(&mut outer_html, k, v);
         }
 
-        inner_html.push('>');
+        outer_html.push('>');
 
-        for &handle in self.children().top().iter() {
-            let node = handle.get(parser).unwrap();
-            inner_html.push_str(&node.inner_html(parser));
-        }
+        // TODO(y21): More of an idea than a TODO, but a potential perf improvement
+        // could be having some kind of internal inner_html function that takes a &mut String
+        // and simply writes to it instead of returning a newly allocated string for every element
+        // and appending it
+        outer_html.push_str(&self.inner_html(parser));
 
-        inner_html.push_str("</");
-        inner_html.push_str(&self._name.as_utf8_str());
-        inner_html.push('>');
+        outer_html.push_str("</");
+        outer_html.push_str(&self._name.as_utf8_str());
+        outer_html.push('>');
 
-        inner_html
+        outer_html
+    }
+
+    /// Returns the contained markup
+    ///
+    /// ## Limitations
+    /// - The order of tag attributes is not guaranteed
+    /// - Spaces within the tag are not preserved (i.e. `<img      src="">` may become `<img src="">`)
+    ///
+    /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
+    pub fn inner_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
+        self.children()
+            .top()
+            .iter()
+            .map(|handle| handle.get(parser).unwrap())
+            .map(|node| node.outer_html(parser))
+            .collect::<String>()
     }
 
     /// Returns the raw HTML of this tag.
@@ -541,6 +563,20 @@ impl<'a, 'b> Children<'a, 'b> {
     }
 }
 
+/// A thin mutable wrapper around the children of [`HTMLTag`]
+#[derive(Debug)]
+pub struct ChildrenMut<'a, 'b>(&'b mut HTMLTag<'a>);
+
+impl<'a, 'b> ChildrenMut<'a, 'b> {
+    /// Returns the topmost, direct children of this tag as a mutable slice.
+    ///
+    /// See [`Children::top`] for more details and examples.
+    #[inline]
+    pub fn top_mut(&mut self) -> &mut RawChildren {
+        &mut self.0._children
+    }
+}
+
 /// Attempts to find the very last node handle that is contained in the given tag
 fn find_last_node_handle<'a>(tag: &HTMLTag<'a>, parser: &Parser<'a>) -> Option<NodeHandle> {
     let last_handle = tag._children.as_slice().last().copied()?;
@@ -576,6 +612,15 @@ impl<'a> Node<'a> {
             Node::Comment(_) => Cow::Borrowed(""),
             Node::Raw(r) => r.as_utf8_str(),
             Node::Tag(t) => t.inner_text(parser),
+        }
+    }
+
+    /// Returns the outer HTML of this node
+    pub fn outer_html<'s>(&'s self, parser: &Parser<'a>) -> Cow<'s, str> {
+        match self {
+            Node::Comment(c) => c.as_utf8_str(),
+            Node::Raw(r) => r.as_utf8_str(),
+            Node::Tag(t) => Cow::Owned(t.outer_html(parser)),
         }
     }
 

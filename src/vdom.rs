@@ -131,6 +131,8 @@ impl<'a> VDom<'a> {
 
     /// Returns the contained markup of all of the elements in this DOM.
     ///
+    /// Equivalent to [Element#outerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/outerHTML) in browsers)
+    ///
     /// # Example
     /// ```
     /// let html = r#"<div><p href="/about" id="find-me">Hello world</p></div>"#;
@@ -145,14 +147,14 @@ impl<'a> VDom<'a> {
     ///
     /// element.attributes_mut().get_mut("href").flatten().unwrap().set("/");
     ///
-    /// assert_eq!(dom.inner_html(), r#"<div><p href="/" id="find-me">Hello world</p></div>"#);
+    /// assert_eq!(dom.outer_html(), r#"<div><p href="/" id="find-me">Hello world</p></div>"#);
     /// ```
-    pub fn inner_html(&self) -> String {
+    pub fn outer_html(&self) -> String {
         let mut inner_html = String::with_capacity(self.parser.stream.len());
 
         for node in self.children() {
             let node = node.get(&self.parser).unwrap();
-            inner_html.push_str(&node.inner_html(&self.parser));
+            inner_html.push_str(&node.outer_html(&self.parser));
         }
 
         inner_html
@@ -182,29 +184,26 @@ impl<'a> VDom<'a> {
 /// The input string is freed once this struct goes out of scope.
 /// The only way to construct this is by calling `parse_owned()`.
 #[derive(Debug)]
-pub struct VDomGuard<'a> {
+pub struct VDomGuard {
     /// Wrapped VDom instance
-    dom: VDom<'a>,
+    dom: VDom<'static>,
     /// The leaked input string that is referenced by self.dom
     _s: RawString,
     /// PhantomData for self.dom
-    _phantom: PhantomData<&'a str>,
+    _phantom: PhantomData<&'static str>,
 }
 
-unsafe impl<'a> Send for VDomGuard<'a> {}
-unsafe impl<'a> Sync for VDomGuard<'a> {}
+unsafe impl Send for VDomGuard {}
+unsafe impl Sync for VDomGuard {}
 
-impl<'a> VDomGuard<'a> {
+impl VDomGuard {
     /// Parses the input string
-    pub(crate) fn parse(
-        input: String,
-        options: ParserOptions,
-    ) -> Result<VDomGuard<'a>, ParseError> {
+    pub(crate) fn parse(input: String, options: ParserOptions) -> Result<VDomGuard, ParseError> {
         let input = RawString::new(input);
 
         let ptr = input.as_ptr();
 
-        let input_ref: &'a str = unsafe { &*ptr };
+        let input_ref: &'static str = unsafe { &*ptr };
 
         // Parsing will either:
         // a) succeed, and we return a VDom instance
@@ -222,18 +221,18 @@ impl<'a> VDomGuard<'a> {
     }
 }
 
-impl<'a> VDomGuard<'a> {
+impl VDomGuard {
     /// Returns a reference to the inner DOM.
     ///
     /// The lifetime of the returned `VDom` is bound to self so that elements cannot outlive this `VDomGuard` struct.
-    pub fn get_ref<'b>(&'a self) -> &'b VDom<'a> {
+    pub fn get_ref<'a>(&'a self) -> &'a VDom<'a> {
         &self.dom
     }
 
     /// Returns a mutable reference to the inner DOM.
     ///
     /// The lifetime of the returned `VDom` is bound to self so that elements cannot outlive this `VDomGuard` struct.
-    pub fn get_mut_ref<'b>(&'b mut self) -> &'b VDom<'a> {
+    pub fn get_mut_ref<'a, 'b: 'a>(&'b mut self) -> &'b VDom<'a> {
         &mut self.dom
     }
 }

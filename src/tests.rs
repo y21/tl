@@ -9,13 +9,31 @@ fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
 }
 
 #[test]
-fn inner_html() {
-    let dom = parse("abc <p>test</p> def", ParserOptions::default()).unwrap();
+fn outer_html() {
+    let dom = parse(
+        "abc <p>test<span>a</span></p> def",
+        ParserOptions::default(),
+    )
+    .unwrap();
     let parser = dom.parser();
 
     let tag = force_as_tag(dom.children()[1].get(parser).unwrap());
 
-    assert_eq!(tag.inner_html(parser), "<p>test</p>");
+    assert_eq!(tag.outer_html(parser), "<p>test<span>a</span></p>");
+}
+
+#[test]
+fn inner_html() {
+    let dom = parse(
+        "abc <p>test<span>a</span></p> def",
+        ParserOptions::default(),
+    )
+    .unwrap();
+    let parser = dom.parser();
+
+    let tag = force_as_tag(dom.children()[1].get(parser).unwrap());
+
+    assert_eq!(tag.inner_html(parser), "test<span>a</span>");
 }
 
 #[test]
@@ -41,7 +59,7 @@ fn get_element_by_id_default() {
 
     let el = force_as_tag(tag.get(dom.parser()).unwrap());
 
-    assert_eq!(el.inner_html(parser), "<p id=\"test\"></p>")
+    assert_eq!(el.outer_html(parser), "<p id=\"test\"></p>")
 }
 
 #[test]
@@ -57,7 +75,7 @@ fn get_element_by_id_tracking() {
 
     let el = force_as_tag(tag.get(dom.parser()).unwrap());
 
-    assert_eq!(el.inner_html(parser), "<p id=\"test\"></p>")
+    assert_eq!(el.outer_html(parser), "<p id=\"test\"></p>")
 }
 
 #[test]
@@ -116,6 +134,28 @@ fn ignore_void_closing_tags() {
     assert_eq!(head_tag.name(), "head");
     assert_eq!(base_tag.name(), "base");
     assert_eq!(link_tag.name(), "link");
+}
+
+#[test]
+pub fn children_mut() {
+    let input = "<head><p>Replace me</p> World</head>";
+
+    let mut dom = parse(input, Default::default()).unwrap();
+    let children = dom.children();
+    let child = children[0]
+        .clone()
+        .get_mut(dom.parser_mut())
+        .unwrap()
+        .as_tag_mut()
+        .unwrap();
+
+    let mut children = child.children_mut();
+    let top = children.top_mut();
+    let handle = top[0].clone();
+    let node = handle.get_mut(dom.parser_mut()).unwrap();
+    *node = Node::Raw("Hello".into());
+
+    assert_eq!(dom.outer_html(), "<head>Hello World</head>");
 }
 
 #[test]
@@ -659,7 +699,7 @@ fn attributes_remove_inner_html() {
         .attributes_mut()
         .remove_value("contenteditable");
 
-    assert_eq!(dom.inner_html(), "<span contenteditable>testing</span>");
+    assert_eq!(dom.outer_html(), "<span contenteditable>testing</span>");
 
     dom.nodes_mut()[0]
         .as_tag_mut()
@@ -667,7 +707,7 @@ fn attributes_remove_inner_html() {
         .attributes_mut()
         .remove("contenteditable");
 
-    assert_eq!(dom.inner_html(), "<span>testing</span>");
+    assert_eq!(dom.outer_html(), "<span>testing</span>");
 }
 
 #[test]
