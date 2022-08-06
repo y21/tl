@@ -15,10 +15,10 @@ If you need a parser that closely follows the standard, consider using [html5eve
 Add `tl` to your dependencies.
 ```toml
 [dependencies]
-tl = "0.7.5"
+tl = "0.7.6"
 # or, with explicit SIMD support
 # (requires a nightly compiler!)
-tl = { version = "0.7.5", features = ["simd"] }
+tl = { version = "0.7.6", features = ["simd"] }
 ```
 
 The main function is `tl::parse()`. It accepts an HTML source code string and parses it. It is important to note that tl currently silently ignores tags that are invalid, sort of like browsers do. Sometimes, this means that large chunks of the HTML document do not appear in the resulting tree.

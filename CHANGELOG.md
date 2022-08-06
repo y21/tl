@@ -1,5 +1,11 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.7.6
+- Fixes a build error if compiled with the `simd` feature flag. See [y21/tl#41](https://github.com/y21/tl/issues/41) for more details.
+- In prior versions, `innerHTML()` actually had the behavior of `Element#outerHTML`. This was changed and `innerHTML` now correctly only returns the markup of its subnodes, and not the markup of the own node.
+- `outerHTML()` was added to nodes, which moves the old behavior to another function.
+- Added `children_mut()`, which allows mutating the subnodes of an HTML Tag.
+
 # 0.7.5
 - Fixed a bug that caused the parser to parse closing tags incorrectly. See [y21/tl#37](https://github.com/y21/tl/issues/37) and [y21/tl#38](https://github.com/y21/tl/pull/38) for more details.
 
