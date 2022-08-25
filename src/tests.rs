@@ -572,6 +572,35 @@ mod query_selector {
             "PASS"
         );
     }
+
+    #[test]
+    fn query_selector_with_quote() {
+        let input = r#"<div><meta property="og:title" content="hello" /></div>"#;
+        let dom = parse(input, ParserOptions::default()).unwrap();
+        let parser = dom.parser();
+        let node_option = dom
+            .query_selector(r#"meta[property="og:title"]"#)
+            .and_then(|mut iter| iter.next());
+        let value = if let Some(node) = node_option {
+            Some(
+                node.get(parser)
+                    .unwrap()
+                    .as_tag()
+                    .unwrap()
+                    .attributes()
+                    .get("content")
+                    .flatten()
+                    .unwrap()
+                    .try_as_utf8_str()
+                    .unwrap()
+                    .to_string(),
+            )
+        } else {
+            None
+        };
+
+        assert_eq!(value, Some("hello".to_string()));
+    }
 }
 
 #[test]

@@ -83,7 +83,9 @@ impl<'a> Parser<'a> {
             }
             Some(b'=') => {
                 self.stream.advance();
+                self.stream.expect_and_skip(b'"')?;
                 let value = self.read_identifier();
+                self.stream.expect_and_skip(b'"')?;
                 self.stream.expect_and_skip(b']')?;
                 Selector::AttributeValue(attribute, value)
             }
