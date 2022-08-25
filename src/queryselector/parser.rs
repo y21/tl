@@ -86,8 +86,8 @@ impl<'a> Parser<'a> {
                 let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\'']);
                 let value = self.read_identifier();
                 if let Some(quote) = quote {
-                  // Only require the given quote if the value starts with a quote
-                  self.stream.expect_and_skip(quote)?;
+                    // Only require the given quote if the value starts with a quote
+                    self.stream.expect_and_skip(quote)?;
                 }
                 self.stream.expect_and_skip(b']')?;
                 Selector::AttributeValue(attribute, value)
@@ -95,7 +95,12 @@ impl<'a> Parser<'a> {
             Some(c @ b'~' | c @ b'^' | c @ b'$' | c @ b'*') => {
                 self.stream.advance();
                 self.stream.expect_and_skip(b'=')?;
+                let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\'']);
                 let value = self.read_identifier();
+                if let Some(quote) = quote {
+                    // Only require the given quote if the value starts with a quote
+                    self.stream.expect_and_skip(quote)?;
+                }
                 self.stream.expect_and_skip(b']')?;
                 match c {
                     b'~' => Selector::AttributeValueWhitespacedContains(attribute, value),
