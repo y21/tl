@@ -6,6 +6,8 @@ pub fn is_ident(c: u8) -> bool {
         || c == b'-'
         || c == b'_'
         || c == b':'
+        || c == b'+'
+        || c == b'/'
 }
 
 #[inline(always)]
