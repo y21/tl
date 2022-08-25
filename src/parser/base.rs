@@ -210,7 +210,7 @@ impl<'a> Parser<'a> {
                 .as_tag_mut()
                 .unwrap();
 
-            last._children.push(handle);
+            last.children.push(handle);
         } else {
             self.ast.push(handle);
         }
@@ -243,17 +243,17 @@ impl<'a> Parser<'a> {
                 .unwrap();
 
             let ptr = self.stream.data().as_ptr() as usize;
-            let offset = tag._raw.as_ptr() as usize;
+            let offset = tag.raw.as_ptr() as usize;
             let offset = offset - ptr;
 
-            tag._raw = self.stream.slice(offset, self.stream.idx).into();
+            tag.raw = self.stream.slice(offset, self.stream.idx).into();
 
             let (track_classes, track_ids) = (
                 self.options.is_tracking_classes(),
                 self.options.is_tracking_ids(),
             );
 
-            if let (true, Some(bytes)) = (track_classes, &tag._attributes.class) {
+            if let (true, Some(bytes)) = (track_classes, &tag.attributes.class) {
                 let s = bytes
                     .as_bytes_borrowed()
                     .and_then(|x| std::str::from_utf8(x).ok())
@@ -269,7 +269,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            if let (true, Some(bytes)) = (track_ids, &tag._attributes.id) {
+            if let (true, Some(bytes)) = (track_ids, &tag.attributes.id) {
                 self.ids.insert(bytes.clone(), handle);
             }
         }

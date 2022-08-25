@@ -55,7 +55,7 @@ impl<'a> VDom<'a> {
                 .enumerate()
                 .find(|(_, node)| {
                     node.as_tag().map_or(false, |tag| {
-                        tag._attributes.id.as_ref().map_or(false, |x| x.eq(&bytes))
+                        tag.attributes.id.as_ref().map_or(false, |x| x.eq(&bytes))
                     })
                 })
                 .map(|(id, _)| NodeHandle::new(id as InnerNodeHandle))
@@ -84,7 +84,7 @@ impl<'a> VDom<'a> {
                 .enumerate()
                 .filter_map(move |(id, node)| {
                     node.as_tag().and_then(|tag| {
-                        tag._attributes
+                        tag.attributes
                             .is_class_member(member)
                             .then(|| NodeHandle::new(id as InnerNodeHandle))
                     })

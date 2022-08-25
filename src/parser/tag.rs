@@ -223,10 +223,10 @@ impl<'a> Attributes<'a> {
 /// Represents a single HTML element
 #[derive(Debug, Clone)]
 pub struct HTMLTag<'a> {
-    pub(crate) _name: Bytes<'a>,
-    pub(crate) _attributes: Attributes<'a>,
-    pub(crate) _children: RawChildren,
-    pub(crate) _raw: Bytes<'a>,
+    pub(crate) name: Bytes<'a>,
+    pub(crate) attributes: Attributes<'a>,
+    pub(crate) children: RawChildren,
+    pub(crate) raw: Bytes<'a>,
 }
 
 impl<'a> HTMLTag<'a> {
@@ -239,10 +239,10 @@ impl<'a> HTMLTag<'a> {
         raw: Bytes<'a>,
     ) -> Self {
         Self {
-            _name: name,
-            _attributes: attr,
-            _children: children,
-            _raw: raw,
+            name,
+            attributes: attr,
+            children,
+            raw,
         }
     }
 
@@ -260,25 +260,25 @@ impl<'a> HTMLTag<'a> {
     /// Returns the name of this HTML tag
     #[inline]
     pub fn name(&self) -> &Bytes<'a> {
-        &self._name
+        &self.name
     }
 
     /// Returns a mutable reference to the name of this HTML tag
     #[inline]
     pub fn name_mut(&mut self) -> &mut Bytes<'a> {
-        &mut self._name
+        &mut self.name
     }
 
     /// Returns attributes of this HTML tag
     #[inline]
     pub fn attributes(&self) -> &Attributes<'a> {
-        &self._attributes
+        &self.attributes
     }
 
     /// Returns a mutable reference to the attributes of this HTML tag
     #[inline]
     pub fn attributes_mut(&mut self) -> &mut Attributes<'a> {
-        &mut self._attributes
+        &mut self.attributes
     }
 
     /// Returns the contained markup
@@ -289,7 +289,7 @@ impl<'a> HTMLTag<'a> {
     ///
     /// Equivalent to [Element#outerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/outerHTML) in browsers)
     pub fn outer_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
-        let mut outer_html = format!("<{}", self._name.as_utf8_str());
+        let mut outer_html = format!("<{}", self.name.as_utf8_str());
 
         #[inline]
         fn write_attribute(dest: &mut String, k: Cow<str>, v: Option<Cow<str>>) {
@@ -319,7 +319,7 @@ impl<'a> HTMLTag<'a> {
         outer_html.push_str(&self.inner_html(parser));
 
         outer_html.push_str("</");
-        outer_html.push_str(&self._name.as_utf8_str());
+        outer_html.push_str(&self.name.as_utf8_str());
         outer_html.push('>');
 
         outer_html
@@ -347,7 +347,7 @@ impl<'a> HTMLTag<'a> {
     /// **Note:** Mutating this tag does *not* re-compute the HTML representation of this tag.
     /// This simply returns a reference to the substring.
     pub fn raw(&self) -> &Bytes<'a> {
-        &self._raw
+        &self.raw
     }
 
     /// Returns the boundaries/position `(start, end)` of this HTML tag in the source string.
@@ -363,7 +363,7 @@ impl<'a> HTMLTag<'a> {
     /// assert_eq!(&source[start..=end], "<span>hello</span>");
     /// ```
     pub fn boundaries(&self, parser: &Parser<'a>) -> (usize, usize) {
-        let raw = self._raw.as_bytes();
+        let raw = self.raw.as_bytes();
         let input = parser.stream.data().as_ptr();
         let start = raw.as_ptr();
         let offset = start as usize - input as usize;
@@ -376,14 +376,14 @@ impl<'a> HTMLTag<'a> {
     /// This function may not allocate memory for a new string as it can just return the part of the tag that doesn't have markup.
     /// For tags that *do* have more than one subnode, this will allocate memory
     pub fn inner_text<'p>(&self, parser: &'p Parser<'a>) -> Cow<'p, str> {
-        let len = self._children.len();
+        let len = self.children.len();
 
         if len == 0 {
             // If there are no subnodes, we can just return a static, empty, string slice
             return Cow::Borrowed("");
         }
 
-        let first = self._children[0].get(parser).unwrap();
+        let first = self.children[0].get(parser).unwrap();
 
         if len == 1 {
             match &first {
@@ -397,7 +397,7 @@ impl<'a> HTMLTag<'a> {
         // TODO: check if String::with_capacity() is worth it
         let mut s = String::from(first.inner_text(parser));
 
-        for &id in self._children.iter().skip(1) {
+        for &id in self.children.iter().skip(1) {
             let node = id.get(parser).unwrap();
 
             match &node {
@@ -465,7 +465,7 @@ impl<'a> HTMLTag<'a> {
     where
         F: FnMut(&Node<'a>) -> bool,
     {
-        for &id in self._children.iter() {
+        for &id in self.children.iter() {
             let node = id.get(parser).unwrap();
 
             if f(node) {
@@ -510,13 +510,13 @@ impl<'a, 'b> Children<'a, 'b> {
     /// ```
     #[inline]
     pub fn top(&self) -> &RawChildren {
-        &self.0._children
+        &self.0.children
     }
 
     /// Returns the starting boundary of the children of this tag.
     #[inline]
     pub fn start(&self) -> Option<InnerNodeHandle> {
-        self.0._children.get(0).map(NodeHandle::get_inner)
+        self.0.children.get(0).map(NodeHandle::get_inner)
     }
 
     /// Returns the ending boundary of the children of this tag.
@@ -575,13 +575,13 @@ impl<'a, 'b> ChildrenMut<'a, 'b> {
     /// See [`Children::top`] for more details and examples.
     #[inline]
     pub fn top_mut(&mut self) -> &mut RawChildren {
-        &mut self.0._children
+        &mut self.0.children
     }
 }
 
 /// Attempts to find the very last node handle that is contained in the given tag
 fn find_last_node_handle<'a>(tag: &HTMLTag<'a>, parser: &Parser<'a>) -> Option<NodeHandle> {
-    let last_handle = tag._children.as_slice().last().copied()?;
+    let last_handle = tag.children.as_slice().last().copied()?;
 
     let child = last_handle
         .get(parser)

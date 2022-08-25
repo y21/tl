@@ -587,13 +587,13 @@ fn nodes_order() {
     assert_eq!(nodes.len(), 5);
 
     // First node is <p>
-    assert_eq!(&nodes[0].as_tag().unwrap()._name, "p");
+    assert_eq!(&nodes[0].as_tag().unwrap().name, "p");
     // Second node is inner text of <p>: test
     assert_eq!(nodes[1].as_raw().unwrap().as_bytes(), b"test");
     // Third node is <div>
-    assert_eq!(&nodes[2].as_tag().unwrap()._name, "div");
+    assert_eq!(&nodes[2].as_tag().unwrap().name, "div");
     // Fourth node is inner <span> node
-    assert_eq!(&nodes[3].as_tag().unwrap()._name, "span");
+    assert_eq!(&nodes[3].as_tag().unwrap().name, "span");
     // Fifth node is inner text of <span>: test2
     assert_eq!(nodes[4].as_raw().unwrap().as_bytes(), b"test2");
 }
@@ -663,7 +663,7 @@ fn self_closing_no_child() {
     let dom = parse("<br /><p>test</p>", Default::default()).unwrap();
     let nodes = dom.nodes();
     assert_eq!(nodes.len(), 3);
-    assert_eq!(nodes[0].as_tag().unwrap()._children.len(), 0);
+    assert_eq!(nodes[0].as_tag().unwrap().children.len(), 0);
     assert_eq!(nodes[0].as_tag().unwrap().raw(), "<br />");
 }
 
