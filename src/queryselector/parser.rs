@@ -83,9 +83,12 @@ impl<'a> Parser<'a> {
             }
             Some(b'=') => {
                 self.stream.advance();
-                self.stream.expect_and_skip(b'"')?;
+                let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\'']);
                 let value = self.read_identifier();
-                self.stream.expect_and_skip(b'"')?;
+                if let Some(quote) = quote {
+                  // Only require the given quote if the value starts with a quote
+                  self.stream.expect_and_skip(quote)?;
+                }
                 self.stream.expect_and_skip(b']')?;
                 Selector::AttributeValue(attribute, value)
             }
