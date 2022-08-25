@@ -1,10 +1,12 @@
+use smallvec::SmallVec;
+
 use super::{
     constants,
     handle::NodeHandle,
     tag::{Attributes, HTMLTag, Node},
 };
 use crate::InnerNodeHandle;
-use crate::{bytes::Bytes, inline::vec::InlineVec, simd, ParseError};
+use crate::{bytes::Bytes, simd, ParseError};
 use crate::{stream::Stream, ParserOptions};
 use std::collections::HashMap;
 
@@ -12,7 +14,7 @@ use std::collections::HashMap;
 pub type Tree<'a> = Vec<Node<'a>>;
 
 /// Inline class vector
-pub type ClassVec = InlineVec<NodeHandle, 2>;
+pub type ClassVec = SmallVec<[NodeHandle; 2]>;
 
 /// HTML Version (<!DOCTYPE>)
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -118,8 +120,7 @@ impl<'a> Parser<'a> {
 
         // If we do not find any characters that are not identifiers
         // then we are probably at the end of the stream
-        let end = simd::search_non_ident(bytes)
-            .unwrap_or_else(|| self.stream.len() - start);
+        let end = simd::search_non_ident(bytes).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         Some(self.stream.slice(start, start + end))
@@ -219,10 +220,12 @@ impl<'a> Parser<'a> {
         self.stream.advance();
 
         let closing_tag_name = self.read_to(b'>');
-        
+
         self.stream.expect_and_skip_cond(b'>');
 
-        let closing_tag_matches_parent = self.stack.last()
+        let closing_tag_matches_parent = self
+            .stack
+            .last()
             .and_then(|last_handle| last_handle.get(self))
             .and_then(|last_item| last_item.as_tag())
             .map_or(false, |last_tag| last_tag.name() == closing_tag_name);
@@ -260,7 +263,7 @@ impl<'a> Parser<'a> {
                     for class in s {
                         self.classes
                             .entry(class.into())
-                            .or_insert_with(InlineVec::new)
+                            .or_insert_with(SmallVec::new)
                             .push(handle);
                     }
                 }
@@ -335,7 +338,7 @@ impl<'a> Parser<'a> {
                 let this = self.register_tag(Node::Tag(HTMLTag::new(
                     name.into(),
                     attr,
-                    InlineVec::new(),
+                    SmallVec::new(),
                     self.stream.slice(start, self.stream.idx).into(),
                 )));
 

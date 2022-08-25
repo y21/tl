@@ -1,5 +1,7 @@
+use smallvec::SmallVec;
+
 use crate::{
-    inline::{hashmap::InlineHashMap, vec::InlineVec},
+    inline::hashmap::InlineHashMap,
     queryselector::{self, QuerySelectorIterator},
     Bytes, InnerNodeHandle,
 };
@@ -14,7 +16,7 @@ const INLINED_SUBNODES: usize = 2;
 pub type RawAttributesMap<'a> = InlineHashMap<Bytes<'a>, Option<Bytes<'a>>, INLINED_ATTRIBUTES>;
 
 /// The type of vector for children of an HTML tag
-pub type RawChildren = InlineVec<NodeHandle, INLINED_SUBNODES>;
+pub type RawChildren = SmallVec<[NodeHandle; INLINED_SUBNODES]>;
 
 /// Stores all attributes of an HTML tag, as well as additional metadata such as `id` and `class`
 #[derive(Debug, Clone)]
@@ -233,7 +235,7 @@ impl<'a> HTMLTag<'a> {
     pub(crate) fn new(
         name: Bytes<'a>,
         attr: Attributes<'a>,
-        children: InlineVec<NodeHandle, INLINED_SUBNODES>,
+        children: SmallVec<[NodeHandle; INLINED_SUBNODES]>,
         raw: Bytes<'a>,
     ) -> Self {
         Self {

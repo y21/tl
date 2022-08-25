@@ -21,6 +21,7 @@ simd = []
 __INTERNALS_DO_NOT_USE = []
 
 [dependencies]
+smallvec = { version = "1.9.0", features = ["const_generics"] }
 
 
 [dev-dependencies]
