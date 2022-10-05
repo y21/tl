@@ -9,6 +9,10 @@ use super::{handle::NodeHandle, Parser};
 
 const INLINED_ATTRIBUTES: usize = 2;
 const INLINED_SUBNODES: usize = 2;
+const HTML_VOID_ELEMENTS: [&str; 16] = [
+    "area", "base", "br", "col", "command", "embed", "hr", "img", "input", "keygen", "link",
+    "meta", "param", "source", "track", "wbr",
+];
 
 /// The type of map for "raw" attributes
 pub type RawAttributesMap<'a> = InlineHashMap<Bytes<'a>, Option<Bytes<'a>>, INLINED_ATTRIBUTES>;
@@ -287,7 +291,9 @@ impl<'a> HTMLTag<'a> {
     ///
     /// Equivalent to [Element#outerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/outerHTML) in browsers)
     pub fn outer_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
-        let mut outer_html = format!("<{}", self._name.as_utf8_str());
+        let tag_name = self._name.as_utf8_str();
+        let is_void_element = HTML_VOID_ELEMENTS.contains(&tag_name.as_ref());
+        let mut outer_html = format!("<{}", &tag_name);
 
         #[inline]
         fn write_attribute(dest: &mut String, k: Cow<str>, v: Option<Cow<str>>) {
@@ -309,6 +315,11 @@ impl<'a> HTMLTag<'a> {
         }
 
         outer_html.push('>');
+
+        // void elements have neither content nor a closing tag.
+        if is_void_element {
+            return outer_html;
+        }
 
         // TODO(y21): More of an idea than a TODO, but a potential perf improvement
         // could be having some kind of internal inner_html function that takes a &mut String

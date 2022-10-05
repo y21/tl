@@ -23,6 +23,16 @@ fn outer_html() {
 }
 
 #[test]
+fn outer_html_void_elements() {
+    const HTML_INPUT: &str = r#"<html><head></head><body><img src=""><br><hr></body></html>"#;
+    let vdom = parse(HTML_INPUT, ParserOptions::default()).unwrap();
+    assert_eq!(
+        r#"<html><head></head><body><img src=""><br><hr></body></html>"#,
+        vdom.outer_html()
+    );
+}
+
+#[test]
 fn inner_html() {
     let dom = parse(
         "abc <p>test<span>a</span></p> def",
