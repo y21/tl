@@ -289,7 +289,7 @@ impl<'a> HTMLTag<'a> {
     /// - The order of tag attributes is not guaranteed
     /// - Spaces within the tag are not preserved (i.e. `<img      src="">` may become `<img src="">`)
     ///
-    /// Equivalent to [Element#outerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/outerHTML) in browsers)
+    /// Equivalent to [Element#outerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/outerHTML) in browsers.
     pub fn outer_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
         let tag_name = self._name.as_utf8_str();
         let is_void_element = HTML_VOID_ELEMENTS.contains(&tag_name.as_ref());
@@ -340,7 +340,7 @@ impl<'a> HTMLTag<'a> {
     /// - The order of tag attributes is not guaranteed
     /// - Spaces within the tag are not preserved (i.e. `<img      src="">` may become `<img src="">`)
     ///
-    /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers)
+    /// Equivalent to [Element#innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) in browsers.
     pub fn inner_html<'p>(&'p self, parser: &'p Parser<'a>) -> String {
         self.children()
             .top()
@@ -381,7 +381,7 @@ impl<'a> HTMLTag<'a> {
     }
 
     /// Returns the contained text of this element, excluding any markup.
-    /// Equivalent to [Element#innerText](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerText) in browsers)
+    /// Equivalent to [Element#innerText](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/innerText) in browsers.
     /// This function may not allocate memory for a new string as it can just return the part of the tag that doesn't have markup.
     /// For tags that *do* have more than one subnode, this will allocate memory
     pub fn inner_text<'p>(&self, parser: &'p Parser<'a>) -> Cow<'p, str> {
