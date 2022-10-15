@@ -127,6 +127,30 @@ fn html5() {
 }
 
 #[test]
+fn html4_strict() {
+    let dom = parse(r#"<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> hello"#, ParserOptions::default()).unwrap();
+
+    assert_eq!(dom.version(), Some(HTMLVersion::StrictHTML401));
+    assert_eq!(dom.children().len(), 1)
+}
+
+#[test]
+fn html4_transitional() {
+    let dom = parse(r#"<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN "http://www.w3.org/TR/1999/REC-html401-19991224/loose.dtd"> hello"#, ParserOptions::default()).unwrap();
+
+    assert_eq!(dom.version(), Some(HTMLVersion::TransitionalHTML401));
+    assert_eq!(dom.children().len(), 1)
+}
+
+#[test]
+fn html4_frameset() {
+    let dom = parse(r#"<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN" "http://www.w3.org/TR/1999/REC-html401-19991224/frameset.dtd"> hello"#, ParserOptions::default()).unwrap();
+
+    assert_eq!(dom.version(), Some(HTMLVersion::FramesetHTML401));
+    assert_eq!(dom.children().len(), 1)
+}
+
+#[test]
 fn ignore_void_closing_tags() {
     let input = r#"
         <head>
