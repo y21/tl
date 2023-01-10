@@ -739,3 +739,14 @@ fn tag_raw_abrupt_stop() {
     let from_raw = first_tag.raw().try_as_utf8_str().unwrap();
     assert_eq!(from_raw, "<p>abcd</p");
 }
+
+#[test]
+fn illegal_close_tag() {
+    let input = "<font size=1>font</font siz>";
+    let vdom = parse(input, Default::default()).unwrap();
+    let inner_text = vdom.children()[0]
+        .get(vdom.parser())
+        .unwrap()
+        .inner_text(vdom.parser());
+    assert_eq!(inner_text, "font");
+}
