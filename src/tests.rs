@@ -649,6 +649,17 @@ fn comment() {
 }
 
 #[test]
+fn odd_dash_comment_regression() {
+    let dom = parse("<!-- test --->", Default::default()).unwrap();
+    let nodes = dom.nodes();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(
+        nodes[0].as_comment().unwrap().as_utf8_str(),
+        "<!-- test --->"
+    );
+}
+
+#[test]
 fn tag_all_children() {
     fn assert_len(input: &str, len: usize) {
         let dom = parse(input, Default::default()).unwrap();

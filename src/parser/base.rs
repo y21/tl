@@ -131,16 +131,11 @@ impl<'a> Parser<'a> {
 
             if self
                 .stream
-                .slice_len(idx, constants::COMMENT.len())
-                .eq(constants::COMMENT)
+                .slice_len(idx, constants::COMMENT_END.len())
+                .eq(constants::COMMENT_END)
             {
-                self.stream.advance_by(constants::COMMENT.len());
-
-                let is_end_of_comment = self.stream.expect_and_skip_cond(b'>');
-
-                if is_end_of_comment {
-                    return self.stream.slice(start, self.stream.idx);
-                }
+                self.stream.advance_by(constants::COMMENT_END.len());
+                return self.stream.slice(start, self.stream.idx);
             }
 
             self.stream.advance();
