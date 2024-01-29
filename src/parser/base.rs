@@ -118,8 +118,7 @@ impl<'a> Parser<'a> {
 
         // If we do not find any characters that are not identifiers
         // then we are probably at the end of the stream
-        let end = simd::search_non_ident(bytes)
-            .unwrap_or_else(|| self.stream.len() - start);
+        let end = simd::search_non_ident(bytes).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         Some(self.stream.slice(start, start + end))
@@ -219,10 +218,12 @@ impl<'a> Parser<'a> {
         self.stream.advance();
 
         let closing_tag_name = self.read_to(b'>');
-        
+
         self.stream.expect_and_skip_cond(b'>');
 
-        let closing_tag_matches_parent = self.stack.last()
+        let closing_tag_matches_parent = self
+            .stack
+            .last()
             .and_then(|last_handle| last_handle.get(self))
             .and_then(|last_item| last_item.as_tag())
             .map_or(false, |last_tag| last_tag.name() == closing_tag_name);
@@ -296,10 +297,9 @@ impl<'a> Parser<'a> {
             if simd::matches_case_insensitive(tag, *b"doctype") {
                 let doctype = self.read_ident()?;
 
-                let html5 = simd::matches_case_insensitive(doctype, *b"html");
-
-                if html5 {
-                    self.version = Some(HTMLVersion::HTML5);
+                if simd::matches_case_insensitive(doctype, *b"html") {
+                    self.skip_whitespaces();
+                    self.version = self.detect_html_version();
                 }
 
                 self.skip_whitespaces();
@@ -308,6 +308,36 @@ impl<'a> Parser<'a> {
         }
 
         Some(())
+    }
+
+    fn detect_html_version(&mut self) -> Option<HTMLVersion> {
+        if let Some(byte) = self.stream.current() {
+            if byte == &b'>' {
+                return Some(HTMLVersion::HTML5);
+            }
+        }
+
+        // it's old HTML 4 doctype. skipping the ' PUBLIC "-//W3C//DTD HTML 4.01"' part
+        self.stream.advance_by(29);
+
+        if let Some(byte) = self.stream.current() {
+            if byte == &b'/' {
+                return Some(HTMLVersion::StrictHTML401);
+            }
+        }
+
+        self.stream.advance();
+        let variant_marker = self.read_ident()?;
+
+        if simd::matches_case_insensitive(variant_marker, *b"transitional//en") {
+            return Some(HTMLVersion::TransitionalHTML401);
+        };
+
+        if simd::matches_case_insensitive(variant_marker, *b"frameset//en") {
+            return Some(HTMLVersion::FramesetHTML401);
+        };
+
+        None
     }
 
     fn parse_tag(&mut self) -> Option<()> {

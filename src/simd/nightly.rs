@@ -101,6 +101,9 @@ pub fn search_non_ident(haystack: &[u8]) -> Option<usize> {
     let needle_uc_z = u8x16::splat(b'Z');
     let needle_minus = u8x16::splat(b'-');
     let needle_underscore = u8x16::splat(b'_');
+    let needle_colon = u8x16::splat(b':');
+    let needle_plus = u8x16::splat(b'+');
+    let needle_slash = u8x16::splat(b'/');
 
     while i <= len - 16 {
         let mut bytes = [0; 16];
@@ -122,7 +125,10 @@ pub fn search_non_ident(haystack: &[u8]) -> Option<usize> {
 
         let eq_minus = bytes.simd_eq(needle_minus);
         let eq_underscore = bytes.simd_eq(needle_underscore);
-        let symbol = eq_minus | eq_underscore;
+        let eq_plus = bytes.simd_eq(needle_plus);
+        let eq_colon = bytes.simd_eq(needle_colon);
+        let eq_slash = bytes.simd_eq(needle_slash);
+        let symbol = eq_minus | eq_underscore | eq_plus | eq_colon | eq_slash;
 
         let or = !(digit | lowercase | uppercase | symbol).to_int();
 
