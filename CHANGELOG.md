@@ -1,5 +1,9 @@
 Changes annotated with `⚠` are breaking.
 
+# 0.7.8
+- Fixes a build error if compiled with the `simd` feature flag. See [y21/tl#60]
+- Fixes MDN-related doc comments ([y21/tl#51])
+
 # 0.7.7
 - Fixes a bug in the query selector parser that made it fail to parse values containing `:`. See [y21/tl#46](https://github.com/y21/tl/issues/46) and [y21/tl#47] for more details.
 

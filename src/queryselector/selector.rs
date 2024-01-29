@@ -19,7 +19,7 @@ pub enum Selector<'a> {
     Descendant(Box<Selector<'a>>, Box<Selector<'a>>),
     /// Parent combinator: .foo > .bar
     Parent(Box<Selector<'a>>, Box<Selector<'a>>),
-    /// Attribute: [foo]
+    /// Attribute: \[foo\]
     Attribute(&'a [u8]),
     /// Attribute with value: [foo=bar]
     AttributeValue(&'a [u8], &'a [u8]),
