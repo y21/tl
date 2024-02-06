@@ -590,18 +590,22 @@ impl<'a, 'b> ChildrenMut<'a, 'b> {
 
 /// Attempts to find the very last node handle that is contained in the given tag
 fn find_last_node_handle<'a>(tag: &HTMLTag<'a>, parser: &Parser<'a>) -> Option<NodeHandle> {
-    let last_handle = tag._children.as_slice().last().copied()?;
+    let mut tag = tag;
+    let mut last_handle = None;
 
-    let child = last_handle
-        .get(parser)
-        .expect("Failed to get child node, please open a bug report") // this shouldn't happen
-        .as_tag();
-
-    if let Some(child) = child {
-        // Recursively call this function to get to the innermost node
-        find_last_node_handle(child, parser).or(Some(last_handle))
-    } else {
-        Some(last_handle)
+    loop {
+        if let Some(last_child_handle) = tag._children.as_slice().last().copied() {
+            last_handle = Some(last_child_handle);
+            if let Some(child) = last_child_handle
+                .get(parser)
+                .expect("Failed to get child node, please open a bug report") // this shouldn't happen
+                .as_tag()
+            {
+                tag = child; // Continue looking at the child
+                continue;
+            }
+        };
+        break last_handle;
     }
 }
 
