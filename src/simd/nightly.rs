@@ -1,4 +1,4 @@
-use std::{ptr, simd::*};
+use std::{ptr, simd::*, simd::cmp::{SimdPartialEq,  SimdPartialOrd}};
 
 use crate::simd::fallback;
 
