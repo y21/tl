@@ -217,17 +217,23 @@ impl<'a> Parser<'a> {
 
     fn read_end(&mut self) {
         self.stream.advance();
+        self.skip_whitespaces();
 
-        let closing_tag_name = self.read_to(b'>');
-        
-        self.stream.expect_and_skip_cond(b'>');
+        if let Some(closing_tag_name) = self.read_ident() {
+            self.skip_whitespaces();
+            self.stream.expect_and_skip_cond(b'>');
 
-        let closing_tag_matches_parent = self.stack.last()
-            .and_then(|last_handle| last_handle.get(self))
-            .and_then(|last_item| last_item.as_tag())
-            .map_or(false, |last_tag| last_tag.name() == closing_tag_name);
+            let closing_tag_matches_parent = self
+                .stack
+                .last()
+                .and_then(|last_handle| last_handle.get(self))
+                .and_then(|last_item| last_item.as_tag())
+                .map_or(false, |last_tag| last_tag.name() == closing_tag_name);
 
-        if !closing_tag_matches_parent {
+            if !closing_tag_matches_parent {
+                return;
+            }
+        } else {
             return;
         }
 

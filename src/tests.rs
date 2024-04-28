@@ -1,4 +1,4 @@
-use crate::{parse, parse_owned, Bytes};
+use crate::{parse, parse_owned, Bytes, VDom};
 use crate::{parser::*, HTMLTag, Node};
 
 fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
@@ -777,4 +777,35 @@ fn tag_raw_abrupt_stop() {
 
     let from_raw = first_tag.raw().try_as_utf8_str().unwrap();
     assert_eq!(from_raw, "<p>abcd</p");
+}
+
+#[test]
+fn line_breaks_inside_tags() {
+    /// Asserts that the given node is a div with the given text as its only child.
+    fn assert_div_with_text(node: &NodeHandle, dom: &VDom, text: &[u8]) {
+        let tag = node.get(dom.parser()).unwrap().as_tag().unwrap();
+        assert_eq!(&tag._name, "div");
+        assert_eq!(tag._children.len(), 1);
+        assert_eq!(
+            tag._children[0]
+                .get(dom.parser())
+                .unwrap()
+                .as_raw()
+                .unwrap()
+                .as_bytes(),
+            text
+        );
+    }
+
+    let input = "<div>div 1</div><\ndiv\n>div 2</\ndiv\n><div>div 3</div><div>div 4</div>";
+    let dom = parse(input, Default::default()).unwrap();
+    let children = dom.children();
+
+    // each of the 4 divs should be a top level child
+    assert_eq!(children.len(), 4);
+
+    assert_div_with_text(&children[0], &dom, b"div 1");
+    assert_div_with_text(&children[1], &dom, b"div 2");
+    assert_div_with_text(&children[2], &dom, b"div 3");
+    assert_div_with_text(&children[3], &dom, b"div 4");
 }
