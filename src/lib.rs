@@ -68,7 +68,7 @@ pub fn parse(input: &str, options: ParserOptions) -> Result<VDom<'_>, ParseError
 /// }
 /// ```
 pub fn parse_query_selector(input: &str) -> Option<Selector<'_>> {
-    let selector = queryselector::Parser::new(input.as_bytes()).selector()?;
+    let selector = queryselector::Parser::new(input.as_bytes()).parse_selectors_group()?;
     Some(selector)
 }
 

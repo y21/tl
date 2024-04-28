@@ -511,6 +511,8 @@ fn unquoted() {
 }
 
 mod query_selector {
+    use crate::queryselector::Selector;
+
     use super::*;
     #[test]
     fn query_selector_simple() {
@@ -610,6 +612,137 @@ mod query_selector {
         };
 
         assert_eq!(value, Some("hello".to_string()));
+    }
+
+    #[test]
+    fn parse_query_selector_whitespace_before() {
+        let selector = crate::parse_query_selector(" .hello").unwrap();
+        assert!(matches!(selector, Selector::Class(b"hello")));
+    }
+
+    #[test]
+    fn parse_query_selector_whitespace_after() {
+        let selector = crate::parse_query_selector(".hello ").unwrap();
+        assert!(matches!(selector, Selector::Class(b"hello")));
+    }
+
+    #[test]
+    fn parse_query_selector_whitespace_before_and_after() {
+        let selector = crate::parse_query_selector(" .hello ").unwrap();
+        assert!(matches!(selector, Selector::Class(b"hello")));
+    }
+
+    #[test]
+    fn parse_query_selector_simple_class() {
+        let selector = crate::parse_query_selector(".hello").unwrap();
+        assert!(matches!(selector, Selector::Class(b"hello")));
+    }
+
+    #[test]
+    fn parse_query_selector_simple_or() {
+        let selector = crate::parse_query_selector(".hello, world").unwrap();
+        assert!(
+            matches!(selector, Selector::Or(left, right) if matches!(&*left, Selector::Class(b"hello")) && matches!(&*right, Selector::Tag(b"world")))
+        );
+    }
+
+    #[test]
+    fn parse_query_selector_simple_and() {
+        let selector = crate::parse_query_selector("hello.world").unwrap();
+        assert!(
+            matches!(selector, Selector::And(left, right) if matches!(&*left, Selector::Tag(b"hello")) && matches!(&*right, Selector::Class(b"world")))
+        );
+    }
+
+    #[test]
+    fn parse_query_selector_simple_descendant() {
+        let selector = crate::parse_query_selector("hello .world").unwrap();
+        assert!(
+            matches!(selector, Selector::Descendant(left, right) if matches!(&*left, Selector::Tag(b"hello")) && matches!(&*right, Selector::Class(b"world")))
+        );
+    }
+
+    #[test]
+    fn parse_query_selector_simple_parent() {
+        let selector = crate::parse_query_selector("hello > .world").unwrap();
+        assert!(
+            matches!(selector, Selector::Parent(left, right) if matches!(
+                &*left, Selector::Tag(b"hello")
+            ) && matches!(&*right, Selector::Class(b"world")))
+        );
+    }
+
+    #[test]
+    fn parse_query_selector_list_descendant() {
+        let selector = crate::parse_query_selector("hello .world, world.hello").unwrap();
+        assert!(matches!(
+            selector,
+            Selector::Or(left, right) if matches!(
+                &*left, Selector::Descendant(left, right) if matches!(
+                    &**left, Selector::Tag(b"hello")
+                ) && matches!(&**right, Selector::Class(b"world"))
+            ) && matches!(
+                &*right, Selector::And(left, right) if matches!(
+                    &**left, Selector::Tag(b"world")
+                ) && matches!(&**right, Selector::Class(b"hello"))
+            )
+        ));
+    }
+
+    #[test]
+    fn parse_query_selector_list_parent() {
+        let selector = crate::parse_query_selector("hello > .world, world.hello").unwrap();
+        assert!(matches!(
+            selector,
+            Selector::Or(left, right) if matches!(
+                &*left, Selector::Parent(left, right) if matches!(
+                    &**left, Selector::Tag(b"hello")
+                ) && matches!(&**right, Selector::Class(b"world"))
+            ) && matches!(
+                &*right, Selector::And(left, right) if matches!(
+                    &**left, Selector::Tag(b"world")
+                ) && matches!(&**right, Selector::Class(b"hello"))
+            )
+        ));
+    }
+
+    #[test]
+    fn parse_query_selector_list_descendant_and_parent() {
+        let selector = crate::parse_query_selector("hello .world, world > .hello.world").unwrap();
+        assert!(matches!(
+            selector,
+            Selector::Or(left, right) if matches!(
+                &*left, Selector::Descendant(left, right) if matches!(
+                    &**left, Selector::Tag(b"hello")
+                ) && matches!(&**right, Selector::Class(b"world"))
+            ) && matches!(
+                &*right, Selector::Parent(left, right) if matches!(
+                    &**left, Selector::Tag(b"world")
+                ) && matches!(
+                    &**right, Selector::And(left, right) if matches!(
+                        &**left, Selector::Class(b"hello")
+                    ) && matches!(&**right, Selector::Class(b"world"))
+                )
+            )
+        ));
+    }
+
+    /// Tests that the parser properly handles both the descendant and child (parent) combinators as in the [Selectors Level 3 Recommendation].
+    ///
+    /// [Selectors Level 3 Recommendation]: https://www.w3.org/TR/selectors-3/#child-combinators
+    #[test]
+    fn parse_query_selector_child_combinators() {
+        let selector = crate::parse_query_selector("div ol>li p").unwrap();
+        assert!(matches!(
+            selector,
+            Selector::Descendant(left, right) if matches!(
+                &*left, Selector::Parent(left, right) if matches!(
+                    &**left, Selector::Descendant(left, right) if matches!(
+                        &**left, Selector::Tag(b"div")
+                    ) && matches!(&**right, Selector::Tag(b"ol"))
+                ) && matches!(&**right, Selector::Tag(b"li"))
+            ) && matches!(&*right, Selector::Tag(b"p"))
+        ));
     }
 }
 

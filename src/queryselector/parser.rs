@@ -40,40 +40,6 @@ impl<'a> Parser<'a> {
         self.stream.slice(start, self.stream.idx)
     }
 
-    fn parse_combinator(&mut self, left: Selector<'a>) -> Option<Selector<'a>> {
-        let has_whitespaces = self.skip_whitespaces();
-
-        let tok = if let Some(tok) = self.stream.current_cpy() {
-            tok
-        } else {
-            return Some(left);
-        };
-
-        let combinator = match tok {
-            b',' => {
-                self.stream.advance();
-                let right = self.selector()?;
-                Selector::Or(Box::new(left), Box::new(right))
-            }
-            b'>' => {
-                self.stream.advance();
-                let right = self.selector()?;
-                Selector::Parent(Box::new(left), Box::new(right))
-            }
-            _ if has_whitespaces => {
-                let right = self.selector()?;
-                Selector::Descendant(Box::new(left), Box::new(right))
-            }
-            _ if !has_whitespaces => {
-                let right = self.selector()?;
-                Selector::And(Box::new(left), Box::new(right))
-            }
-            _ => unreachable!(),
-        };
-
-        Some(combinator)
-    }
-
     fn parse_attribute(&mut self) -> Option<Selector<'a>> {
         let attribute = self.read_identifier();
         let ty = match self.stream.current_cpy() {
@@ -115,37 +81,89 @@ impl<'a> Parser<'a> {
         Some(ty)
     }
 
-    /// Parses a full selector
-    pub fn selector(&mut self) -> Option<Selector<'a>> {
-        self.skip_whitespaces();
-        let tok = self.stream.current_cpy()?;
+    /// Parses a selectors group production as defined in the [grammar provided by the W3C].
+    ///
+    /// [grammar provided by the W3C]: https://www.w3.org/TR/selectors-3/#w3cselgrammar
+    pub fn parse_selectors_group(&mut self) -> Option<Selector<'a>> {
+        let mut left = self.parse_selector()?;
 
-        let left = match tok {
-            b'#' => {
+        while let Some(right) = self.parse_selector() {
+            left = Selector::Or(Box::new(left), Box::new(right));
+        }
+
+        Some(left)
+    }
+
+    /// Parses a selector production as defined in the [grammar provided by the W3C].
+    ///
+    /// [grammar provided by the W3C]: https://www.w3.org/TR/selectors-3/#w3cselgrammar
+    fn parse_selector(&mut self) -> Option<Selector<'a>> {
+        let mut left = self.parse_simple_selector_sequence()?;
+        let mut has_whitespaces = self.skip_whitespaces();
+
+        while let Some(tok) = self.stream.current_cpy() {
+            match tok {
+                b',' => {
+                    self.stream.advance();
+                    return Some(left);
+                }
+                b'>' => {
+                    self.stream.advance();
+                    let right = self.parse_simple_selector_sequence()?;
+                    left = Selector::Parent(Box::new(left), Box::new(right));
+                }
+                _ if has_whitespaces => {
+                    let right = self.parse_simple_selector_sequence()?;
+                    left = Selector::Descendant(Box::new(left), Box::new(right));
+                }
+                _ => unreachable!(),
+            }
+
+            has_whitespaces = self.skip_whitespaces();
+        }
+
+        Some(left)
+    }
+
+    /// Parses a simple selector sequence production as defined in the [grammar provided by the W3C].
+    ///
+    /// [grammar provided by the W3C]: https://www.w3.org/TR/selectors-3/#w3cselgrammar
+    fn parse_simple_selector_sequence(&mut self) -> Option<Selector<'a>> {
+        let mut result = None;
+        self.skip_whitespaces();
+
+        while let Some(right) = match self.stream.current_cpy() {
+            Some(b'#') => {
                 self.stream.advance();
                 let id = self.read_identifier();
-                Selector::Id(id)
+                Some(Selector::Id(id))
             }
-            b'.' => {
+            Some(b'.') => {
                 self.stream.advance();
                 let class = self.read_identifier();
-                Selector::Class(class)
+                Some(Selector::Class(class))
             }
-            b'*' => {
+            Some(b'*') => {
                 self.stream.advance();
-                Selector::All
+                Some(Selector::All)
             }
-            b'[' => {
+            Some(b'[') => {
                 self.stream.advance();
-                self.parse_attribute()?
+                self.parse_attribute()
             }
-            _ if util::is_ident(tok) => {
+            Some(tok) if util::is_ident(tok) => {
                 let tag = self.read_identifier();
-                Selector::Tag(tag)
+                Some(Selector::Tag(tag))
             }
-            _ => return None,
-        };
+            _ => None,
+        } {
+            if let Some(left) = result {
+                result = Some(Selector::And(Box::new(left), Box::new(right)));
+            } else {
+                result = Some(right);
+            }
+        }
 
-        self.parse_combinator(left)
+        result
     }
 }
