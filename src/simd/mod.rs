@@ -37,11 +37,11 @@ pub fn search_non_ident(haystack: &[u8]) -> Option<usize> {
     )
 }
 
-/// Searches for the first occurence in `haystack`
+/// Searches for the first occurrence in `haystack`
 #[inline]
-pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
+pub fn find3(haystack: &[u8], needle: [u8; 3]) -> Option<usize> {
     decide!(
-        nightly::find4(haystack, needle),
+        nightly::find3(haystack, needle),
         stable::find_multi(haystack, needle)
     )
 }

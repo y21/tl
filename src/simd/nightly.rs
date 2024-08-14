@@ -36,11 +36,11 @@ pub fn find(haystack: &[u8], needle: u8) -> Option<usize> {
     fallback::find(&haystack[i..], needle).map(|x| i + x)
 }
 
-/// Optimized function for finding one of 4 bytes in `haystack`
-pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
+/// Optimized function for finding one of 3 bytes in `haystack`
+pub fn find3(haystack: &[u8], needle: [u8; 3]) -> Option<usize> {
     #[inline(never)]
     #[cold]
-    fn unlikely_find(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
+    fn unlikely_find(haystack: &[u8], needle: [u8; 3]) -> Option<usize> {
         fallback::find_multi(haystack, needle)
     }
 
@@ -54,7 +54,6 @@ pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
     let needle16a = u8x16::splat(needle[0]);
     let needle16b = u8x16::splat(needle[1]);
     let needle16c = u8x16::splat(needle[2]);
-    let needle16d = u8x16::splat(needle[3]);
 
     while i <= len - 16 {
         let mut bytes = [0; 16];
@@ -65,8 +64,7 @@ pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
         let eq1 = bytes.simd_eq(needle16a);
         let eq2 = bytes.simd_eq(needle16b);
         let eq3 = bytes.simd_eq(needle16c);
-        let eq4 = bytes.simd_eq(needle16d);
-        let or = (eq1 | eq2 | eq3 | eq4).to_int();
+        let or = (eq1 | eq2 | eq3).to_int();
         let num = unsafe { std::mem::transmute::<i8x16, u128>(or) };
         if num != 0 {
             return Some(i + (num.trailing_zeros() >> 3) as usize);

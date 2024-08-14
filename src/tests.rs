@@ -320,27 +320,25 @@ mod simd {
     }
 
     #[test]
-    fn string_search_4() {
-        const NEEDLE: [u8; 4] = [b'a', b'b', b'c', b'd'];
+    fn string_search_3() {
+        const NEEDLE: [u8; 3] = [b'a', b'b', b'c'];
 
-        assert_eq!(crate::simd::find4(b"e", NEEDLE), None);
-        assert_eq!(crate::simd::find4(b"a", NEEDLE), Some(0));
-        assert_eq!(crate::simd::find4(b"ea", NEEDLE), Some(1));
-        assert_eq!(crate::simd::find4(b"ef", NEEDLE), None);
-        assert_eq!(crate::simd::find4(b"ef a", NEEDLE), Some(3));
-        assert_eq!(crate::simd::find4(b"ef g", NEEDLE), None);
-        assert_eq!(crate::simd::find4(b"ef ghijk", NEEDLE), None);
-        assert_eq!(crate::simd::find4(b"ef ghijkl", NEEDLE), None);
-        assert_eq!(crate::simd::find4(b"ef ghijkla", NEEDLE), Some(9));
-        assert_eq!(crate::simd::find4(b"ef ghiajklm", NEEDLE), Some(6));
-        assert_eq!(crate::simd::find4(b"ef ghibjklm", NEEDLE), Some(6));
-        assert_eq!(crate::simd::find4(b"ef ghicjklm", NEEDLE), Some(6));
-        assert_eq!(crate::simd::find4(b"ef ghidjklm", NEEDLE), Some(6));
-        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstua", NEEDLE), Some(18));
-        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstub", NEEDLE), Some(18));
-        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstuc", NEEDLE), Some(18));
-        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstud", NEEDLE), Some(18));
-        assert_eq!(crate::simd::find4(b"ef ghijklmnopqrstu", NEEDLE), None);
+        assert_eq!(crate::simd::find3(b"e", NEEDLE), None);
+        assert_eq!(crate::simd::find3(b"a", NEEDLE), Some(0));
+        assert_eq!(crate::simd::find3(b"ea", NEEDLE), Some(1));
+        assert_eq!(crate::simd::find3(b"ef", NEEDLE), None);
+        assert_eq!(crate::simd::find3(b"ef a", NEEDLE), Some(3));
+        assert_eq!(crate::simd::find3(b"ef g", NEEDLE), None);
+        assert_eq!(crate::simd::find3(b"ef ghijk", NEEDLE), None);
+        assert_eq!(crate::simd::find3(b"ef ghijkl", NEEDLE), None);
+        assert_eq!(crate::simd::find3(b"ef ghijkla", NEEDLE), Some(9));
+        assert_eq!(crate::simd::find3(b"ef ghiajklm", NEEDLE), Some(6));
+        assert_eq!(crate::simd::find3(b"ef ghibjklm", NEEDLE), Some(6));
+        assert_eq!(crate::simd::find3(b"ef ghicjklm", NEEDLE), Some(6));
+        assert_eq!(crate::simd::find3(b"ef ghijklmnopqrstua", NEEDLE), Some(18));
+        assert_eq!(crate::simd::find3(b"ef ghijklmnopqrstub", NEEDLE), Some(18));
+        assert_eq!(crate::simd::find3(b"ef ghijklmnopqrstuc", NEEDLE), Some(18));
+        assert_eq!(crate::simd::find3(b"ef ghijklmnopqrstu", NEEDLE), None);
     }
 
     #[test]
@@ -508,6 +506,56 @@ fn unquoted() {
         element.and_then(|x| x.get(parser).map(|x| x.inner_text(parser))),
         Some("Hello World".into())
     );
+}
+
+#[test]
+fn unquoted_href() {
+    // https://github.com/y21/tl/issues/12
+    let input = r#"
+        <a id=u54423 href=https://www.google.com>Hello World</a>
+    "#;
+
+    let dom = parse(input, ParserOptions::default()).unwrap();
+    let parser = dom.parser();
+    let element = dom.get_element_by_id("u54423");
+
+    assert_eq!(
+        element.and_then(|x| x.get(parser).map(|x| x
+            .as_tag()
+            .unwrap()
+            .attributes()
+            .get("href")
+            .flatten()
+            .unwrap()
+            .try_as_utf8_str()
+            .unwrap()
+            .to_string())),
+        Some("https://www.google.com".into())
+    );
+}
+
+#[test]
+fn unquoted_self_closing() {
+    // https://github.com/y21/tl/issues/12
+    let input = r#"
+        <a id=u54423 />
+    "#;
+
+    let dom = parse(input, ParserOptions::default()).unwrap();
+    let element = dom.get_element_by_id("u54423");
+
+    assert!(element.is_some());
+
+    // According to MDN, if there's no space between an unquoted attribute and the closing tag,
+    // the slash is treated as part of the attribute value.
+    let input = r#"
+        <a id=u54423/>
+    "#;
+
+    let dom = parse(input, ParserOptions::default()).unwrap();
+    let element = dom.get_element_by_id("u54423/");
+
+    assert!(element.is_some());
 }
 
 mod query_selector {

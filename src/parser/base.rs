@@ -87,11 +87,11 @@ impl<'a> Parser<'a> {
         self.stream.slice(start, start + end)
     }
 
-    fn read_to4(&mut self, needle: [u8; 4]) -> &'a [u8] {
+    fn read_to3(&mut self, needle: [u8; 3]) -> &'a [u8] {
         let start = self.stream.idx;
         let bytes = &self.stream.data()[start..];
 
-        let end = simd::find4(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
+        let end = simd::find3(bytes, needle).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         self.stream.slice(start, start + end)
@@ -118,8 +118,7 @@ impl<'a> Parser<'a> {
 
         // If we do not find any characters that are not identifiers
         // then we are probably at the end of the stream
-        let end = simd::search_non_ident(bytes)
-            .unwrap_or_else(|| self.stream.len() - start);
+        let end = simd::search_non_ident(bytes).unwrap_or_else(|| self.stream.len() - start);
 
         self.stream.idx += end;
         Some(self.stream.slice(start, start + end))
@@ -163,7 +162,7 @@ impl<'a> Parser<'a> {
         let value = if let Some(quote) = self.stream.expect_oneof_and_skip(&[b'"', b'\'']) {
             self.read_to(quote)
         } else {
-            self.read_to4([b' ', b'\n', b'/', b'>'])
+            self.read_to3([b' ', b'\n', b'>'])
         };
 
         Some((name, Some(value)))
@@ -219,10 +218,12 @@ impl<'a> Parser<'a> {
         self.stream.advance();
 
         let closing_tag_name = self.read_to(b'>');
-        
+
         self.stream.expect_and_skip_cond(b'>');
 
-        let closing_tag_matches_parent = self.stack.last()
+        let closing_tag_matches_parent = self
+            .stack
+            .last()
             .and_then(|last_handle| last_handle.get(self))
             .and_then(|last_item| last_item.as_tag())
             .map_or(false, |last_tag| last_tag.name() == closing_tag_name);
