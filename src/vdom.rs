@@ -232,7 +232,8 @@ impl VDomGuard {
     /// Returns a mutable reference to the inner DOM.
     ///
     /// The lifetime of the returned `VDom` is bound to self so that elements cannot outlive this `VDomGuard` struct.
-    pub fn get_mut_ref<'a, 'b: 'a>(&'b mut self) -> &'b VDom<'a> {
+    pub fn get_mut_ref(&mut self) -> &mut VDom<'static>
+    {
         &mut self.dom
     }
 }
