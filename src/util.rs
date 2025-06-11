@@ -5,9 +5,6 @@ pub fn is_ident(c: u8) -> bool {
         || (b'a'..=b'z').contains(&c)
         || c == b'-'
         || c == b'_'
-        || c == b':'
-        || c == b'+'
-        || c == b'/'
 }
 
 #[inline(always)]

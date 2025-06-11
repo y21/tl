@@ -585,11 +585,11 @@ mod query_selector {
 
     #[test]
     fn query_selector_with_quote() {
-        let input = r#"<div><meta property="og:title" content="hello" /></div>"#;
+        let input = r#"<div><meta property="og:'title'" content="hello" /></div>"#;
         let dom = parse(input, ParserOptions::default()).unwrap();
         let parser = dom.parser();
         let node_option = dom
-            .query_selector(r#"meta[property="og:title"]"#)
+            .query_selector(r#"meta[property="og:'title'"]"#)
             .and_then(|mut iter| iter.next());
         let value = if let Some(node) = node_option {
             Some(

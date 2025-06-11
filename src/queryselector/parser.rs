@@ -25,12 +25,17 @@ impl<'a> Parser<'a> {
         has_whitespace
     }
 
+    #[inline]
     fn read_identifier(&mut self) -> &'a [u8] {
+        self.read_while(util::is_ident)
+    }
+
+    fn read_while(&mut self, mut predicate: impl FnMut(u8) -> bool) -> &'a [u8] {
         let start = self.stream.idx;
 
         while !self.stream.is_eof() {
-            let is_ident = self.stream.current().copied().map_or(false, util::is_ident);
-            if !is_ident {
+            let matched = self.stream.current().copied().map_or(false, &mut predicate);
+            if !matched {
                 break;
             } else {
                 self.stream.advance();
@@ -84,11 +89,13 @@ impl<'a> Parser<'a> {
             Some(b'=') => {
                 self.stream.advance();
                 let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\'']);
-                let value = self.read_identifier();
-                if let Some(quote) = quote {
-                    // Only require the given quote if the value starts with a quote
+                let value = if let Some(quote) = quote {
+                    let value = self.read_while(|c| c != quote);
                     self.stream.expect_and_skip(quote)?;
-                }
+                    value
+                } else {
+                    self.read_identifier()
+                };
                 self.stream.expect_and_skip(b']')?;
                 Selector::AttributeValue(attribute, value)
             }
@@ -96,11 +103,13 @@ impl<'a> Parser<'a> {
                 self.stream.advance();
                 self.stream.expect_and_skip(b'=')?;
                 let quote = self.stream.expect_oneof_and_skip(&[b'"', b'\'']);
-                let value = self.read_identifier();
-                if let Some(quote) = quote {
-                    // Only require the given quote if the value starts with a quote
+                let value = if let Some(quote) = quote {
+                    let value = self.read_while(|c| c != quote);
                     self.stream.expect_and_skip(quote)?;
-                }
+                    value
+                } else {
+                    self.read_identifier()
+                };
                 self.stream.expect_and_skip(b']')?;
                 match c {
                     b'~' => Selector::AttributeValueWhitespacedContains(attribute, value),
