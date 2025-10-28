@@ -188,9 +188,9 @@ pub struct VDomGuard {
     /// Wrapped VDom instance
     dom: VDom<'static>,
     /// The leaked input string that is referenced by self.dom
-    _s: RawString,
+    _b: RawBytes,
     /// PhantomData for self.dom
-    _phantom: PhantomData<&'static str>,
+    _phantom: PhantomData<&'static [u8]>,
 }
 
 unsafe impl Send for VDomGuard {}
@@ -198,23 +198,23 @@ unsafe impl Sync for VDomGuard {}
 
 impl VDomGuard {
     /// Parses the input string
-    pub(crate) fn parse(input: String, options: ParserOptions) -> Result<VDomGuard, ParseError> {
-        let input = RawString::new(input);
+    pub(crate) fn parse(input: Vec<u8>, options: ParserOptions) -> Result<VDomGuard, ParseError> {
+        let input = RawBytes::new(input);
 
         let ptr = input.as_ptr();
 
-        let input_ref: &'static str = unsafe { &*ptr };
+        let input_ref: &'static [u8] = unsafe { &*ptr };
 
         // Parsing will either:
         // a) succeed, and we return a VDom instance
         //    that, when dropped, will free the input string
         // b) fail, and we return a ParseError
-        //    and `RawString`s destructor will run and deallocate the string properly
+        //    and `RawBytes`s destructor will run and deallocate the string properly
         let mut parser = Parser::new(input_ref, options);
         parser.parse()?;
 
         Ok(Self {
-            _s: input,
+            _b: input,
             dom: VDom::from(parser),
             _phantom: PhantomData,
         })
@@ -238,21 +238,21 @@ impl VDomGuard {
 }
 
 #[derive(Debug)]
-struct RawString(*mut str);
+struct RawBytes(*mut [u8]);
 
-impl RawString {
-    pub fn new(s: String) -> Self {
-        Self(Box::into_raw(s.into_boxed_str()))
+impl RawBytes {
+    pub fn new(s: Vec<u8>) -> Self {
+        Self(Box::into_raw(s.into_boxed_slice()))
     }
 
-    pub fn as_ptr(&self) -> *mut str {
+    pub fn as_ptr(&self) -> *mut [u8] {
         self.0
     }
 }
 
-impl Drop for RawString {
+impl Drop for RawBytes {
     fn drop(&mut self) {
-        // SAFETY: the pointer is always valid because `RawString` can only be constructed through `RawString::new()`
+        // SAFETY: the pointer is always valid because `RawBytes` can only be constructed through `RawBytes::new()`
         unsafe {
             drop(Box::from_raw(self.0));
         };

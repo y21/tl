@@ -53,12 +53,12 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn new(input: &str, options: ParserOptions) -> Parser {
+    pub(crate) fn new(input: &[u8], options: ParserOptions) -> Parser {
         Parser {
             stack: Vec::with_capacity(4),
             options,
             tags: Vec::new(),
-            stream: Stream::new(input.as_bytes()),
+            stream: Stream::new(input),
             ast: Vec::new(),
             ids: HashMap::new(),
             classes: HashMap::new(),

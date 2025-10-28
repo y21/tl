@@ -47,6 +47,11 @@ pub use vdom::{VDom, VDomGuard};
 /// assert_eq!(dom.query_selector("div").unwrap().count(), 1);
 /// ```
 pub fn parse(input: &str, options: ParserOptions) -> Result<VDom<'_>, ParseError> {
+    parse_bytes(input.as_bytes(), options)
+}
+
+/// Same as `parse()`, but with `&[u8]` input.
+pub fn parse_bytes(input: &[u8], options: ParserOptions) -> Result<VDom<'_>, ParseError> {
     let mut parser = Parser::new(input, options);
     parser.parse()?;
     Ok(VDom::from(parser))
@@ -83,5 +88,10 @@ pub fn parse_query_selector(input: &str) -> Option<Selector<'_>> {
 /// Once `VDomGuard` goes out of scope, the string will be freed.
 /// It should not be possible to cause UB in its current form and might become a safe function in the future.
 pub unsafe fn parse_owned(input: String, options: ParserOptions) -> Result<VDomGuard, ParseError> {
+    parse_bytes_owned(input.into_bytes(), options)
+}
+
+/// Same as `parse_owned()`, but with `Vec<u8>` input.
+pub unsafe fn parse_bytes_owned(input: Vec<u8>, options: ParserOptions) -> Result<VDomGuard, ParseError> {
     VDomGuard::parse(input, options)
 }

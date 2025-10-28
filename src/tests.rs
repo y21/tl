@@ -1,4 +1,4 @@
-use crate::{parse, parse_owned, Bytes};
+use crate::{parse, parse_bytes, parse_owned, Bytes};
 use crate::{parser::*, HTMLTag, Node};
 
 fn force_as_tag<'a, 'b>(actual: &'a Node<'b>) -> &'a HTMLTag<'b> {
@@ -777,4 +777,19 @@ fn tag_raw_abrupt_stop() {
 
     let from_raw = first_tag.raw().try_as_utf8_str().unwrap();
     assert_eq!(from_raw, "<p>abcd</p");
+}
+
+#[test]
+fn non_utf8() {
+    let input = b"<p>\xc3\x28</p>".as_ref();
+
+    let vdom = parse_bytes(input, Default::default()).unwrap();
+
+    let first_tag = vdom.children()[0]
+        .get(vdom.parser())
+        .unwrap()
+        .as_tag()
+        .unwrap();
+
+    assert_eq!(first_tag.raw().as_bytes(), b"<p>\xc3\x28</p>");
 }
