@@ -518,7 +518,7 @@ impl<'a, 'b> Children<'a, 'b> {
     /// assert_eq!(a.children().top().len(), 3);
     /// ```
     #[inline]
-    pub fn top(&self) -> &RawChildren {
+    pub fn top(&self) -> &'b RawChildren {
         &self.0._children
     }
 
